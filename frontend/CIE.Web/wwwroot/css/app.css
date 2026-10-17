@@ -1,0 +1,155 @@
+/* Design notes
+   Audience: analysts triaging complaints for hours at a time, so the page is calm and legible.
+   Palette: cool paper-grey ground, ink-navy text, ultramarine for things you can act on, and a
+   single magenta reserved for "this week was flagged". Magenta never appears anywhere else, so it
+   always means the same thing.
+   Type: Bricolage Grotesque for headings, Public Sans (the US government's open typeface, apt for
+   consumer-finance data) for reading. Structure comes from rules and alignment, not cards. */
+
+:root {
+    --ground: #e9edf3;
+    --surface: #ffffff;
+    --ink: #17202e;
+    --muted: #566074;
+    --rule: #c6ceda;
+    --link: #2339d4;
+    --alert: #be185d;
+    --alert-wash: #fbe8f0;
+    --ok: #0f766e;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --text: "Public Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 1rem/1.55 var(--text);
+}
+
+a { color: var(--link); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--link); outline-offset: 2px; }
+
+/* ---- shell ---- */
+.top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 2rem;
+    padding: 1rem clamp(1rem, 4vw, 3rem);
+    border-bottom: 2px solid var(--ink);
+    background: var(--surface);
+}
+.top .brand {
+    font: 800 1.25rem/1 var(--display);
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    text-decoration: none;
+}
+.top nav { display: flex; gap: 1.5rem; }
+.top nav a { color: var(--muted); text-decoration: none; padding-bottom: 2px; border-bottom: 2px solid transparent; }
+.top nav a.active { color: var(--ink); border-bottom-color: var(--link); font-weight: 600; }
+
+main { max-width: 64rem; padding: 2rem clamp(1rem, 4vw, 3rem) 4rem; }
+
+/* ---- type ---- */
+h1, h2 { font-family: var(--display); letter-spacing: -0.015em; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(1.75rem, 3.2vw, 2.4rem); font-weight: 800; max-width: 22ch; }
+h2 { font-size: 1.35rem; font-weight: 600; margin: 2.5rem 0 0.75rem; }
+.lede { max-width: 62ch; color: var(--muted); margin: 0.75rem 0 0; }
+.muted { color: var(--muted); }
+code { font-size: 0.9em; background: var(--surface); padding: 0 0.3em; border: 1px solid var(--rule); border-radius: 3px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- tables ---- */
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 0.9rem; }
+tbody tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.alert-text { color: var(--alert); font-weight: 600; }
+
+/* ---- theme list: bar length is the complaint count ---- */
+.themes { list-style: none; margin: 1rem 0 0; padding: 0; }
+.themes li {
+    display: grid;
+    grid-template-columns: minmax(10rem, 18rem) minmax(4rem, 1fr) 4rem minmax(0, 14rem);
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+}
+.themes .bar { height: 0.6rem; background: var(--ink); justify-self: start; min-width: 2px; }
+.themes .n { text-align: right; font-variant-numeric: tabular-nums; }
+.themes .muted { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- facts ---- */
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.5rem; margin: 1.5rem 0 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+/* ---- trend chart ---- */
+.trend { margin: 0; background: var(--surface); border: 1px solid var(--rule); padding: 1rem 1rem 0.5rem; }
+.trend svg { display: block; width: 100%; height: auto; }
+.trend .count { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.trend .baseline { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.trend .flag { fill: var(--alert); stroke: var(--surface); stroke-width: 1.5; }
+.trend figcaption { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; color: var(--muted); font-size: 0.85rem; padding-top: 0.5rem; }
+.trend .key i { display: inline-block; vertical-align: middle; margin: 0 0.35rem 0 0.9rem; }
+.trend .k-count { width: 1.2rem; border-top: 2px solid var(--ink); }
+.trend .k-base { width: 1.2rem; border-top: 2px dashed var(--muted); }
+.trend .k-flag { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: var(--alert); }
+
+/* ---- complaints ---- */
+.complaint { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--ink); padding: 0.9rem 1.1rem; margin: 0 0 0.9rem; max-width: 52rem; }
+.complaint .meta { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.9rem; }
+.complaint .headline { margin: 0 0 0.25rem; font-weight: 600; }
+.complaint .about { margin: 0 0 0.4rem; max-width: 70ch; }
+.complaint .muted { margin: 0 0 0.35rem; font-size: 0.9rem; }
+.complaint button { margin-right: 1rem; }
+
+/* ---- forms and buttons ---- */
+.searchbar { display: flex; gap: 0.5rem; margin-top: 1.5rem; max-width: 40rem; }
+input, textarea {
+    width: 100%; font: inherit; color: inherit; background: var(--surface);
+    border: 1px solid var(--muted); border-radius: 3px; padding: 0.55rem 0.7rem;
+}
+input:disabled, textarea:disabled { background: transparent; border-color: var(--rule); }
+textarea { resize: vertical; line-height: 1.5; }
+.field { margin: 1.1rem 0; max-width: 46rem; }
+.field label { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+
+button {
+    font: 600 1rem var(--text); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--ink); border-radius: 3px; padding: 0.55rem 1rem; cursor: pointer;
+}
+button.primary { background: var(--link); border-color: var(--link); color: #fff; }
+button.danger { color: var(--alert); border-color: var(--alert); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin: 1.5rem 0; }
+
+/* ---- status, notices, history ---- */
+.status { display: inline-block; padding: 0.1rem 0.6rem; border: 1px solid var(--ink); border-radius: 999px; font-size: 0.85rem; font-weight: 600; margin-right: 0.75rem; }
+.status.created { background: var(--ok); border-color: var(--ok); color: #fff; }
+.status.approved { background: var(--link); border-color: var(--link); color: #fff; }
+.status.rejected { color: var(--muted); border-color: var(--muted); text-decoration: line-through; }
+
+.notice { border-left: 4px solid var(--muted); background: var(--surface); padding: 0.75rem 1rem; margin: 1.25rem 0; max-width: 46rem; }
+.notice.error { border-left-color: var(--alert); background: var(--alert-wash); }
+
+.audit { padding-left: 1.2rem; color: var(--muted); font-size: 0.9rem; }
+
+#blazor-error-ui { display: none; position: fixed; bottom: 0; left: 0; right: 0; padding: 0.75rem 1.25rem; background: var(--alert-wash); border-top: 2px solid var(--alert); z-index: 10; }
+#blazor-error-ui .dismiss { cursor: pointer; float: right; }
+.boot { padding: 2rem; color: var(--muted); }
+
+@media (max-width: 40rem) {
+    .themes li { grid-template-columns: 1fr 3rem; }
+    .themes .bar, .themes .muted { display: none; }
+    .facts { grid-template-columns: 1fr; }
+}

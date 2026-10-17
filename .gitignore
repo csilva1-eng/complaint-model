@@ -1,0 +1,9 @@
+data/raw/*
+data/cache/
+data/artifacts/
+!data/raw/.gitkeep
+backend/target/
+frontend/**/bin/
+frontend/**/obj/
+__pycache__/
+venv/

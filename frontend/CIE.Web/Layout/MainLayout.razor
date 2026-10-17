@@ -1,0 +1,13 @@
+@inherits LayoutComponentBase
+@* Shell shared by every page: product name on the left, the three places an analyst works on the right. *@
+
+<header class="top">
+    <NavLink href="" Match="NavLinkMatch.All" class="brand">Complaint Intelligence</NavLink>
+    <nav aria-label="Main">
+        <NavLink href="" Match="NavLinkMatch.All">Signals</NavLink>
+        <NavLink href="search">Find complaints</NavLink>
+        <NavLink href="tickets">Ticket drafts</NavLink>
+    </nav>
+</header>
+
+<main>@Body</main>

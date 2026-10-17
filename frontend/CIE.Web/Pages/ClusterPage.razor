@@ -1,0 +1,89 @@
+@page "/clusters/{Id:int}"
+@inject CieApi Api
+@inject NavigationManager Nav
+
+@* Evidence view for one theme: size and dates, what it is made of, weekly trend with flagged weeks,
+   and typical complaints. This is where the analyst decides whether the pattern is worth a ticket;
+   "Draft Jira ticket" hands the theme to the backend, which prepares a draft for review. *@
+
+<PageTitle>@(detail?.Cluster.Label ?? "Theme")</PageTitle>
+
+@if (error is not null)
+{
+    <div class="notice error" role="alert">@error</div>
+}
+
+@if (detail is null)
+{
+    @if (error is null) { <p class="muted">Loading theme…</p> }
+}
+else
+{
+    var c = detail.Cluster;
+    <h1>@c.Label</h1>
+    <p class="lede">@c.Size complaints, received @c.FirstDate to @c.LastDate.</p>
+
+    <dl class="facts">
+        <dt>Products</dt>
+        <dd>@Mix(c.TopProducts)</dd>
+        <dt>Issues</dt>
+        <dd>@Mix(c.TopIssues)</dd>
+        <dt>Sub-issues</dt>
+        <dd>@Mix(c.TopSubIssues)</dd>
+        <dt>Companies</dt>
+        <dd>@Mix(c.TopCompanies)</dd>
+    </dl>
+
+    <div class="notice">
+        This theme is a recurring mix of product, issue and company. The CFPB file has no complaint text,
+        so it shows what complaints are about, not what customers said.
+    </div>
+
+    <h2>Weekly volume</h2>
+    <TrendChart Points="detail.Trend" />
+
+    <div class="actions">
+        <button class="primary" @onclick="DraftTicket" disabled="@busy">Draft Jira ticket</button>
+        <span class="muted">Creates a draft for you to review. Nothing is sent to Jira until you approve it.</span>
+    </div>
+
+    <h2>Typical complaints</h2>
+    @foreach (var r in detail.Representatives)
+    {
+        <ComplaintCard C="r">
+            <a href="search?similarTo=@r.Id">Find similar complaints</a>
+        </ComplaintCard>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    ClusterDetail? detail;
+    string? error;
+    bool busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        detail = null;
+        error = null;
+        try { detail = await Api.GetCluster(Id); }
+        catch (Exception e) { error = ApiException.Describe(e); }
+    }
+
+    static string Mix(List<NameShare> items) =>
+        items.Count == 0 ? "None" : string.Join(", ", items.Select(i => $"{i.Name} ({Math.Round(i.Share * 100)}%)"));
+
+    async Task DraftTicket()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var ticket = await Api.CreateDraft(Id);
+            Nav.NavigateTo($"tickets/{ticket.Id}");
+        }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+}

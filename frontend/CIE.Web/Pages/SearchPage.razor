@@ -1,0 +1,94 @@
+@page "/search"
+@inject CieApi Api
+
+@* Complaint lookup. Step 1: find complaints by company, product or issue. Step 2: open the complaints
+   whose product/issue/company profile is most similar (cosine similarity, precomputed by the ML
+   pipeline with FAISS). Arriving from a theme page with ?similarTo=<id> skips straight to step 2.
+   Search covers the exported slice of complaints, not every complaint in the CFPB file. *@
+
+<PageTitle>Find complaints</PageTitle>
+
+<h1>Find complaints</h1>
+<p class="lede">
+    Search by company, product or issue, then open the complaints with the most similar profile.
+    The CFPB file has no complaint text, so similarity means "about the same product, issue and company".
+</p>
+
+<div class="searchbar">
+    <label for="q" class="visually-hidden">Search</label>
+    <input id="q" @bind="query" @bind:event="oninput" @onkeydown="OnKey" placeholder="for example: a company name, or “credit report”" />
+    <button class="primary" @onclick="Run" disabled="@busy">Search</button>
+</div>
+
+@if (error is not null)
+{
+    <div class="notice error" role="alert">@error</div>
+}
+
+@if (similarTo is not null)
+{
+    <h2>Complaints similar to #@similarTo</h2>
+    @if (similar.Count == 0)
+    {
+        <p>No similar complaints were found for this one.</p>
+    }
+    @foreach (var s in similar)
+    {
+        <ComplaintCard C="s.Complaint">
+            <p class="muted">Similarity @s.Score.ToString("F2")</p>
+        </ComplaintCard>
+    }
+}
+else if (results is not null)
+{
+    <h2>@results.Count @(results.Count == 1 ? "match" : "matches")</h2>
+    @if (results.Count == 0)
+    {
+        <p>Nothing matched “@query”. Try a shorter or more general word.</p>
+    }
+    @foreach (var r in results)
+    {
+        <ComplaintCard C="r">
+            <button @onclick="() => ShowSimilar(r.Id)">Show similar complaints</button>
+            <a href="clusters/@r.ClusterId">View its theme</a>
+        </ComplaintCard>
+    }
+}
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "similarTo")] public long? SimilarToParam { get; set; }
+
+    string query = "";
+    List<Complaint>? results;
+    List<SimilarComplaint> similar = new();
+    long? similarTo;
+    string? error;
+    bool busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SimilarToParam is long id && id != similarTo) await ShowSimilar(id);
+    }
+
+    async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Run();
+    }
+
+    async Task Run()
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        busy = true; error = null; similarTo = null;
+        try { results = await Api.SearchComplaints(query); }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+
+    async Task ShowSimilar(long id)
+    {
+        busy = true; error = null;
+        try { similar = await Api.GetSimilar(id); similarTo = id; }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+}

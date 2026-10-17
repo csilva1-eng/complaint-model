@@ -1,0 +1,50 @@
+@page "/tickets"
+@inject CieApi Api
+
+@* All ticket drafts and their state. Open one to review, edit, approve, or reject it. *@
+
+<PageTitle>Ticket drafts</PageTitle>
+
+<h1>Ticket drafts</h1>
+
+@if (error is not null)
+{
+    <div class="notice error" role="alert">@error</div>
+}
+else if (tickets is null)
+{
+    <p class="muted">Loading tickets…</p>
+}
+else if (tickets.Count == 0)
+{
+    <p>No drafts yet. Open a theme from the <a href="">signals page</a> and choose “Draft Jira ticket”.</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Status</th><th>Title</th><th>Jira issue</th></tr></thead>
+            <tbody>
+                @foreach (var t in tickets)
+                {
+                    <tr>
+                        <td><span class="status @t.Status.ToLowerInvariant()">@t.Status</span></td>
+                        <td><a href="tickets/@t.Id">@t.Title</a></td>
+                        <td>@(t.JiraKey ?? "Not created")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    List<Ticket>? tickets;
+    string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { tickets = await Api.GetTickets(); }
+        catch (Exception e) { error = ApiException.Describe(e); }
+    }
+}

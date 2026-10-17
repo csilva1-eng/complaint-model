@@ -1,0 +1,122 @@
+@page "/tickets/{Id}"
+@inject CieApi Api
+
+@* The human checkpoint. The system drafted this ticket from a theme; the analyst reads it, fixes the
+   wording, and either approves it (which creates the Jira issue) or rejects it. The hypothesis is
+   always shown as unverified: similar wording is a lead, not a diagnosis. *@
+
+<PageTitle>Review ticket draft</PageTitle>
+
+@if (error is not null)
+{
+    <div class="notice error" role="alert">@error</div>
+}
+
+@if (ticket is null)
+{
+    @if (error is null) { <p class="muted">Loading ticket…</p> }
+}
+else
+{
+    <h1>Review ticket draft</h1>
+    <p>
+        <span class="status @ticket.Status.ToLowerInvariant()">@ticket.Status</span>
+        @if (ticket.JiraKey is not null)
+        {
+            <strong>Created as @ticket.JiraKey.</strong>
+        }
+        <a href="clusters/@ticket.ClusterId">View the theme behind this ticket</a>
+    </p>
+
+    <div class="notice">
+        The hypothesis below is unverified. It comes from similar wording across complaints, not from logs or
+        reproduction. Edit it until you would be comfortable defending it.
+    </div>
+
+    <div class="field">
+        <label for="title">Title</label>
+        <input id="title" @bind="edit.Title" disabled="@(!CanEdit)" />
+    </div>
+    <div class="field">
+        <label for="pattern">Observed pattern</label>
+        <textarea id="pattern" rows="4" @bind="edit.ObservedPattern" disabled="@(!CanEdit)"></textarea>
+    </div>
+    <div class="field">
+        <label for="hyp">Hypothesis (unverified)</label>
+        <textarea id="hyp" rows="4" @bind="edit.Hypothesis" disabled="@(!CanEdit)"></textarea>
+    </div>
+    <div class="field">
+        <label for="next">Next steps</label>
+        <textarea id="next" rows="3" @bind="edit.NextSteps" disabled="@(!CanEdit)"></textarea>
+    </div>
+    <p class="muted">Evidence: complaint IDs @string.Join(", ", ticket.EvidenceIds). Only IDs go into Jira, not complaint text.</p>
+
+    @if (CanApprove)
+    {
+        <div class="actions">
+            <button class="primary" @onclick="Approve" disabled="@busy">Approve and create Jira issue</button>
+            @if (CanEdit)
+            {
+                <button @onclick="Save" disabled="@busy">Save changes</button>
+            }
+            <button class="danger" @onclick="Reject" disabled="@busy">Reject draft</button>
+        </div>
+    }
+
+    <h2>History</h2>
+    <ul class="audit">
+        @foreach (var line in ticket.Audit)
+        {
+            <li>@line</li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    Ticket? ticket;
+    EditModel edit = new();
+    string? error;
+    bool busy;
+
+    bool CanEdit => ticket?.Status == "DRAFT";
+    bool CanApprove => ticket?.Status is "DRAFT" or "APPROVED";
+
+    class EditModel
+    {
+        public string Title { get; set; } = "";
+        public string ObservedPattern { get; set; } = "";
+        public string Hypothesis { get; set; } = "";
+        public string NextSteps { get; set; } = "";
+    }
+
+    protected override Task OnParametersSetAsync() => Run(() => Api.GetTicket(Id));
+
+    Task Save() => Run(() => Api.UpdateTicket(Id, ToEdit()));
+    Task Reject() => Run(() => Api.Reject(Id));
+    Task Approve() => Run(async () =>
+    {
+        if (CanEdit) await Api.UpdateTicket(Id, ToEdit());   // never approve text the analyst has not saved
+        return await Api.Approve(Id);
+    });
+
+    TicketEdit ToEdit() => new(edit.Title, edit.ObservedPattern, edit.Hypothesis, edit.NextSteps);
+
+    async Task Run(Func<Task<Ticket>> action)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            ticket = await action();
+            edit = new EditModel
+            {
+                Title = ticket.Title, ObservedPattern = ticket.ObservedPattern,
+                Hypothesis = ticket.Hypothesis, NextSteps = ticket.NextSteps,
+            };
+        }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+}

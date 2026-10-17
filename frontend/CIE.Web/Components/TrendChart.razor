@@ -1,0 +1,46 @@
+@* Weekly complaint count for one theme: solid line = actual, dashed line = trailing baseline,
+   magenta dots = weeks the detector flagged. Plain SVG, so no JavaScript or chart library. *@
+
+@if (Points.Count < 2)
+{
+    <p class="muted">There are not enough full weeks of data to draw a trend.</p>
+}
+else
+{
+    <figure class="trend">
+        <svg viewBox="0 0 @W @H" role="img" aria-label="Weekly complaints with baseline; flagged weeks are marked">
+            <polyline class="baseline" points="@Series(p => p.BaselineMean)" />
+            <polyline class="count" points="@Series(p => p.Count)" />
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var p = Points[i];
+                if (p.Flagged)
+                {
+                    <circle class="flag" cx="@X(i)" cy="@Y(p.Count)" r="4.5">
+                        <title>Week of @p.WeekStart: @p.Count complaints (z = @p.ZScore.ToString("F1"))</title>
+                    </circle>
+                }
+            }
+        </svg>
+        <figcaption>
+            <span>@Points[0].WeekStart</span>
+            <span class="key"><i class="k-count"></i>complaints per week <i class="k-base"></i>usual level <i class="k-flag"></i>flagged week</span>
+            <span>@Points[Points.Count - 1].WeekStart</span>
+        </figcaption>
+    </figure>
+}
+
+@code {
+    const int W = 720, H = 170, Pad = 10;
+
+    [Parameter, EditorRequired] public IReadOnlyList<TrendPoint> Points { get; set; } = Array.Empty<TrendPoint>();
+
+    double Max => Math.Max(1, Points.Max(p => Math.Max(p.Count, p.BaselineMean)));
+
+    string X(int i) => F(Pad + i * (W - 2.0 * Pad) / (Points.Count - 1));
+    string Y(double v) => F(H - Pad - v / Max * (H - 2 * Pad));
+    string Series(Func<TrendPoint, double> pick) => string.Join(" ", Points.Select((p, i) => $"{X(i)},{Y(pick(p))}"));
+
+    // Always format with the invariant culture: SVG needs "12.5", never "12,5".
+    static string F(double d) => d.ToString("F1", CultureInfo.InvariantCulture);
+}

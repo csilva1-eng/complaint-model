@@ -1,0 +1,24 @@
+@* One complaint as the structured facts the CFPB file carries. There is no free text, so the card
+   says what the complaint is about (issue, company, product), how it was handled, and how common
+   that exact combination is. Anything passed as child content (links, a similarity score, buttons)
+   is shown at the bottom. *@
+
+<article class="complaint">
+    <p class="meta">Complaint @C.Id, received @C.Date</p>
+    <p class="headline">@Headline</p>
+    <p class="about">@About</p>
+    <p class="muted">@Handling</p>
+    <p class="muted">@C.ProfileCount.ToString("N0") complaints share this product, issue and company.</p>
+    @ChildContent
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Complaint C { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    static bool Known(string? s) => !string.IsNullOrWhiteSpace(s) && s != "Unknown";
+
+    string Headline => Known(C.SubIssue) ? $"{C.Issue} / {C.SubIssue}" : C.Issue;
+    string About => Known(C.SubProduct) ? $"{C.Company}. {C.Product}, {C.SubProduct}." : $"{C.Company}. {C.Product}.";
+    string Handling => $"Company response: {C.CompanyResponse}. Timely response: {C.Timely}. State: {C.State}. Submitted via {C.SubmittedVia}.";
+}

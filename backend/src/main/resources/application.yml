@@ -1,0 +1,25 @@
+server:
+  port: 8080
+  error:
+    include-message: always   # lets the dashboard show reasons such as "Only drafts can be edited"
+
+cie:
+  # Folder written by the Python pipeline (relative to where you run the backend: backend/).
+  artifacts-dir: ../data/artifacts
+  # Origin(s) of the Blazor dev server, for CORS.
+  allowed-origins: http://localhost:5173
+
+  # template = deterministic summary built from the data (default, no network, no cost)
+  # llm      = LLM drafts the hypothesis; falls back to template if output fails grounding checks
+  summarizer: template
+
+  jira:
+    mode: mock                 # mock = demo mode, nothing leaves the machine | rest = real Jira Cloud
+    base-url: ""               # e.g. https://your-site.atlassian.net
+    email: ""
+    api-token: ""              # prefer an environment variable over committing this
+    project-key: CIE
+
+  llm:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: claude-sonnet-5-5   # confirm the current model id in Anthropic's docs before use

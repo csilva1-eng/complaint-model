@@ -1,0 +1,91 @@
+@page "/"
+@inject CieApi Api
+
+@* Landing page. Answers one question: where is complaint volume rising faster than normal?
+   Top: flagged weeks, strongest first. Below: every theme, sized by how many complaints it holds.
+   A flag is a reason to investigate, never a verdict. *@
+
+<PageTitle>Signals</PageTitle>
+
+<h1>Where complaint volume is climbing</h1>
+<p class="lede">
+    Themes whose weekly complaints rose well above their own recent level. A rise tells you where to look.
+    It does not tell you why, and complaint volume is not a measure of overall quality.
+</p>
+
+@if (error is not null)
+{
+    <div class="notice error" role="alert">@error</div>
+}
+else if (signals is null)
+{
+    <p class="muted">Loading signals…</p>
+}
+else
+{
+    <h2>Flagged weeks</h2>
+    @if (signals.Count == 0)
+    {
+        <p>No theme crossed the alert threshold in the held-out period. Lower <code>Z_THRESHOLD</code> in <code>ml/config.py</code> to see weaker signals.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Theme</th><th>Week of</th><th class="num">Complaints</th><th class="num">Usual level</th><th class="num">Score (z)</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in signals)
+                    {
+                        <tr>
+                            <td><a href="clusters/@s.ClusterId">@LabelOf(s.ClusterId)</a></td>
+                            <td>@s.WeekStart</td>
+                            <td class="num">@s.Count</td>
+                            <td class="num">@s.BaselineMean.ToString("F1")</td>
+                            <td class="num alert-text">@s.ZScore.ToString("F1")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <h2>All themes</h2>
+    <p class="muted">Bar length shows how many complaints the theme holds. The name is its most distinctive words.</p>
+    <ul class="themes">
+        @foreach (var c in clusters.OrderByDescending(c => c.Size))
+        {
+            <li>
+                <a href="clusters/@c.ClusterId">@c.Label</a>
+                <span class="bar" style="width:@Pct(c.Size)%"></span>
+                <span class="n">@c.Size</span>
+                <span class="muted">@(c.TopIssues.FirstOrDefault()?.Name)</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    List<Signal>? signals;
+    List<Cluster> clusters = new();
+    string? error;
+    int maxSize = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var s = Api.GetSignals(25);
+            var c = Api.GetClusters();
+            await Task.WhenAll(s, c);
+            signals = await s;
+            clusters = await c;
+            maxSize = Math.Max(1, clusters.Select(x => x.Size).DefaultIfEmpty(1).Max());
+        }
+        catch (Exception e) { error = ApiException.Describe(e); }
+    }
+
+    string LabelOf(int id) => clusters.FirstOrDefault(c => c.ClusterId == id)?.Label ?? $"Theme {id}";
+    string Pct(int n) => (100.0 * n / maxSize).ToString("F0", CultureInfo.InvariantCulture);
+}

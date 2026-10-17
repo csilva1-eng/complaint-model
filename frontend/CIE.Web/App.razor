@@ -1,0 +1,13 @@
+@* Router: maps URLs to the pages in /Pages and wraps everything in MainLayout. *@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <h1>Page not found</h1>
+            <p>Check the address, or <a href="">go back to the signals</a>.</p>
+        </LayoutView>
+    </NotFound>
+</Router>
