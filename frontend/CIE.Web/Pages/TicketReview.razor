@@ -25,7 +25,14 @@ else
         {
             <strong>Created as @ticket.JiraKey.</strong>
         }
-        <a href="clusters/@ticket.ClusterId">View the theme behind this ticket</a>
+        @if (ticket.Company is not null)
+        {
+            <a href="?company=@Uri.EscapeDataString(ticket.Company)&tab=tickets">Back to @ticket.Company tickets</a>
+        }
+        else
+        {
+            <a href="clusters/@ticket.ClusterId">View the theme behind this ticket</a>
+        }
     </p>
 
     <div class="notice">

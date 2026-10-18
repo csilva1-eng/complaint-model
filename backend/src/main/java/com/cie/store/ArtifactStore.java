@@ -32,6 +32,8 @@ public class ArtifactStore {
     private Map<Integer, Cluster> clusterById;
     private Map<Integer, List<TrendPoint>> trendByCluster;
     private List<Signal> signals;
+    private List<String> companies;
+    private Map<String, List<CompanySignal>> companySignals;
     private Map<Long, List<Neighbor>> neighbors;
 
     public ArtifactStore(@Value("${cie.artifacts-dir}") String dir, ObjectMapper mapper) {
@@ -54,6 +56,14 @@ public class ArtifactStore {
         signals = new ArrayList<>(read("signals.json", new TypeReference<List<Signal>>() {}));
         signals.sort(Comparator.comparingDouble(Signal::zScore).reversed());
 
+        companies = read("companies.json", new TypeReference<List<String>>() {}).stream()
+            .filter(company -> !company.equalsIgnoreCase("Unknown"))
+            .sorted(String.CASE_INSENSITIVE_ORDER)
+            .toList();
+        companySignals = read("company_signals.json", new TypeReference<List<CompanySignal>>() {}).stream()
+            .collect(Collectors.groupingBy(CompanySignal::company));
+        companySignals.values().forEach(list -> list.sort(Comparator.comparingDouble(CompanySignal::zScore).reversed()));
+
         neighbors = read("neighbors.json", new TypeReference<Map<Long, List<Neighbor>>>() {});
     }
 
@@ -72,5 +82,22 @@ public class ArtifactStore {
     public Optional<Cluster> cluster(int id) { return Optional.ofNullable(clusterById.get(id)); }
     public List<TrendPoint> trend(int clusterId) { return trendByCluster.getOrDefault(clusterId, List.of()); }
     public List<Signal> signals() { return signals; }
+    public List<String> companies() { return companies; }
+    public List<CompanySignal> companySignals(String company) {
+        return companySignals.getOrDefault(company, List.of());
+    }
+    public List<Complaint> companyComplaints(String company, String query, int limit) {
+        String needle = query.toLowerCase(Locale.ROOT).trim();
+        return complaints.values().stream()
+                .filter(c -> c.company().equals(company) && hasNeighbors(c.id()))
+                .filter(c -> needle.isEmpty() || String.join(" ", c.product(), c.subProduct(), c.issue(), c.subIssue())
+                        .toLowerCase(Locale.ROOT).contains(needle))
+                .limit(Math.max(1, Math.min(limit, 100)))
+                .toList();
+    }
+    public boolean ticketEvidenceBelongsToCompany(Ticket ticket, String company) {
+        return company.equals(ticket.company());
+    }
     public List<Neighbor> neighbors(long id) { return neighbors.getOrDefault(id, List.of()); }
+    public boolean hasNeighbors(long id) { return !neighbors.getOrDefault(id, List.of()).isEmpty(); }
 }

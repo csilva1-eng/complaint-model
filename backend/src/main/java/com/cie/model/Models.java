@@ -39,6 +39,9 @@ public final class Models {
     public record Signal(int clusterId, String weekStart, int count, double baselineMean,
                          double zScore, String reason) {}
 
+    public record CompanySignal(String company, String tier, String weekStart, int count, double baselineMean,
+                                double zScore, String reason) {}
+
     public record Neighbor(long id, double score) {}
 
     // ---- 2. API responses --------------------------------------------------------------------
@@ -57,7 +60,7 @@ public final class Models {
     public record TicketEdit(String title, String observedPattern, String hypothesis, String nextSteps) {}
 
     /** Immutable; each change produces a new copy with an audit line appended. */
-    public record Ticket(String id, int clusterId, TicketStatus status, String title,
+    public record Ticket(String id, int clusterId, String company, TicketStatus status, String title,
                          String observedPattern, String hypothesis, String nextSteps,
                          List<Long> evidenceIds, String jiraKey, List<String> audit) {
 
@@ -66,12 +69,12 @@ public final class Models {
         }
 
         public Ticket edited(TicketEdit e) {
-            return new Ticket(id, clusterId, status, e.title(), e.observedPattern(), e.hypothesis(),
+                return new Ticket(id, clusterId, company, status, e.title(), e.observedPattern(), e.hypothesis(),
                     e.nextSteps(), evidenceIds, jiraKey, appended("Edited by analyst"));
         }
 
         public Ticket transition(TicketStatus next, String key, String note) {
-            return new Ticket(id, clusterId, next, title, observedPattern, hypothesis, nextSteps,
+            return new Ticket(id, clusterId, company, next, title, observedPattern, hypothesis, nextSteps,
                     evidenceIds, key != null ? key : jiraKey, appended(note));
         }
 

@@ -50,11 +50,27 @@ a:hover { text-decoration-thickness: 2px; }
     color: var(--ink);
     text-decoration: none;
 }
-.top nav { display: flex; gap: 1.5rem; }
-.top nav a { color: var(--muted); text-decoration: none; padding-bottom: 2px; border-bottom: 2px solid transparent; }
-.top nav a.active { color: var(--ink); border-bottom-color: var(--link); font-weight: 600; }
 
 main { max-width: 64rem; padding: 2rem clamp(1rem, 4vw, 3rem) 4rem; }
+
+.company-picker {
+    max-width: 42rem;
+    margin: clamp(2rem, 10vh, 7rem) auto 0;
+    padding: 2rem 0;
+    border-top: 4px solid var(--ink);
+}
+.eyebrow { color: var(--ok); font-size: 0.82rem; font-weight: 700; text-transform: uppercase; margin: 0 0 0.6rem; }
+.company-picker h1 { max-width: 18ch; }
+.company-field { margin-top: 2rem; }
+.company-field input { min-height: 3.25rem; }
+.company-picker button { margin-top: 0.25rem; }
+.company-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 1rem; }
+.company-heading h1 { overflow-wrap: anywhere; }
+.change-company { margin-bottom: 0.35rem; }
+.workspace-tabs { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 1.5rem 0 2rem; border-bottom: 2px solid var(--ink); }
+.workspace-tabs a { display: block; padding: 0.65rem 0 0.55rem; margin-bottom: -2px; border-bottom: 3px solid transparent; text-decoration: none; color: var(--muted); font-weight: 600; }
+.workspace-tabs a.selected { color: var(--ink); border-bottom-color: var(--link); }
+.workspace-tabs + section h2 { margin-top: 0; }
 
 /* ---- type ---- */
 h1, h2 { font-family: var(--display); letter-spacing: -0.015em; line-height: 1.15; margin: 0; }
@@ -73,6 +89,9 @@ th { font-weight: 600; color: var(--muted); font-size: 0.9rem; }
 tbody tr:last-child td { border-bottom: 0; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .alert-text { color: var(--alert); font-weight: 600; }
+.signal-tier { display: inline-block; border: 1px solid currentColor; padding: 0.1rem 0.45rem; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
+.signal-tier.alert { color: var(--alert); background: var(--alert-wash); }
+.signal-tier.watch { color: #805000; background: #fff4d6; }
 
 /* ---- theme list: bar length is the complaint count ---- */
 .themes { list-style: none; margin: 1rem 0 0; padding: 0; }
@@ -149,6 +168,11 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .boot { padding: 2rem; color: var(--muted); }
 
 @media (max-width: 40rem) {
+    .company-picker { margin-top: 2rem; }
+    .workspace-tabs { gap: 0.9rem; }
+    .workspace-tabs a { font-size: 0.92rem; }
+    .searchbar { flex-wrap: wrap; }
+    .searchbar button { width: 100%; }
     .themes li { grid-template-columns: 1fr 3rem; }
     .themes .bar, .themes .muted { display: none; }
     .facts { grid-template-columns: 1fr; }

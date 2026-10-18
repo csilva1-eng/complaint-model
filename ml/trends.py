@@ -7,8 +7,8 @@ baseline (mean and spread of the previous BASELINE_WEEKS weeks).
   z = (count - baseline_mean) / max(baseline_std, sqrt(baseline_mean), 1)
 
 The denominator floor is a Poisson-style guard: with small counts the sample std can be ~0,
-which would turn any wiggle into an "anomaly". A week is flagged only if z is large AND the
-absolute count clears MIN_WEEKLY_COUNT AND the week falls in the held-out EVAL period.
+which would turn any wiggle into an "anomaly". A theme-week is flagged only if z and the
+absolute count clear the theme alert thresholds and the week falls in the held-out period.
 
 Works on two plain arrays (day numbers and theme per complaint), so it handles every complaint
 in the file without building a DataFrame of them. Partial first/last weeks are dropped so
@@ -44,7 +44,8 @@ def score(counts: pd.DataFrame, eval_start):
     std = prior.rolling(w, min_periods=w).std()
     floor = np.sqrt(mean).clip(lower=1.0)
     z = (counts - mean) / std.where(std > floor, floor)
-    flagged = (z >= cfg.Z_THRESHOLD) & (counts >= cfg.MIN_WEEKLY_COUNT)
+    flagged = ((z >= cfg.THEME_ALERT_Z_THRESHOLD)
+               & (counts >= cfg.THEME_ALERT_MIN_WEEKLY_COUNT))
     flagged.loc[counts.index < eval_start] = False           # only alert on the held-out period
     return mean, z, flagged
 
@@ -75,6 +76,42 @@ def detect(days: np.ndarray, clusters: np.ndarray, eval_start: pd.Timestamp):
     ]
     cols = ["clusterId", "weekStart", "count", "baselineMean", "zScore", "reason"]
     return long, signals.sort_values("zScore", ascending=False)[cols].reset_index(drop=True)
+
+
+def detect_company_signals(days: np.ndarray, company_codes: np.ndarray, company_names,
+                           eval_start: pd.Timestamp) -> list[dict]:
+    """Classify company-week increases as alert or watch against each company's baseline."""
+    counts = weekly_counts(days, company_codes)
+    w = cfg.BASELINE_WEEKS
+    prior = counts.shift(1)
+    mean = prior.rolling(w, min_periods=w).mean()
+    std = prior.rolling(w, min_periods=w).std()
+    floor = np.sqrt(mean).clip(lower=1.0)
+    z = (counts - mean) / std.where(std > floor, floor)
+
+    watch = ((z >= cfg.COMPANY_WATCH_Z_THRESHOLD)
+             & (counts >= cfg.COMPANY_WATCH_MIN_WEEKLY_COUNT))
+    watch.loc[counts.index < eval_start] = False
+    week_rows, company_columns = np.where(watch.to_numpy())
+    signals = []
+    for row, col in zip(week_rows, company_columns):
+        count = int(counts.iat[row, col])
+        baseline = float(mean.iat[row, col])
+        z_score = float(z.iat[row, col])
+        week = counts.index[row].strftime("%Y-%m-%d")
+        company_code = int(counts.columns[col])
+        is_alert = (z_score >= cfg.COMPANY_ALERT_Z_THRESHOLD
+                    and count >= cfg.COMPANY_ALERT_MIN_WEEKLY_COUNT)
+        signals.append({
+            "company": str(company_names[company_code]),
+            "tier": "alert" if is_alert else "watch",
+            "weekStart": week,
+            "count": count,
+            "baselineMean": round(baseline, 2),
+            "zScore": round(z_score, 2),
+            "reason": f"{count} complaints in the week of {week} against a trailing average of {baseline:.1f} (z = {z_score:.1f})",
+        })
+    return sorted(signals, key=lambda item: item["zScore"], reverse=True)
 
 
 def explain(signals: pd.DataFrame, days: np.ndarray, themes: np.ndarray, fields: dict,

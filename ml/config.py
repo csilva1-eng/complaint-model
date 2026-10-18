@@ -29,10 +29,12 @@ TRAIN_FRACTION = 0.7        # earliest 70% (by date) fits the models; the rest i
 # --- profiles and embeddings --------------------------------------------------------------
 # A "profile" is a distinct combination of these fields. Complaints with the same profile are
 # indistinguishable to the model, so they are collapsed into one row with a count.
-PROFILE_FIELDS = ["product", "sub_product", "issue", "sub_issue", "company"]
-# How much each field matters when deciding that two profiles are "similar". Raise a weight to
-# make that field dominate; set company low to group by issue type across companies.
-BLOCK_WEIGHTS = {"product": 1.0, "sub_product": 1.0, "issue": 1.5, "sub_issue": 1.0, "company": 0.75}
+PROFILE_FIELDS = ["product", "sub_product", "issue", "sub_issue", "company", "Tags", "Zip Code"]
+# Company stays in profile identity/reporting and filters neighbor candidates, but is not a
+# similarity feature in the embedding score.
+EMBEDDING_FIELDS = ["product", "sub_product", "issue", "sub_issue", "Tags", "Zip Code"]
+BLOCK_WEIGHTS = {"product": 1.0, "sub_product": 1.0, "issue": 1.5, "sub_issue": 1.0,
+                 "Tags": 0.35, "Zip Code": 0.15}
 SVD_COMPONENTS = 64         # divisible by PQ_M so the compressed index option works
 FIT_SAMPLE = 300_000        # training-period complaints used to fit the SVD
 
@@ -61,6 +63,10 @@ EXPORT_SAMPLE = 5_000
 
 # --- change detection -----------------------------------------------------------------------
 BASELINE_WEEKS = 8          # trailing window that defines "normal"
-Z_THRESHOLD = 3.0           # how far above baseline counts as unusual
-MIN_WEEKLY_COUNT = 5        # ignore spikes on tiny absolute volumes
+THEME_ALERT_Z_THRESHOLD = 3.0
+THEME_ALERT_MIN_WEEKLY_COUNT = 5
+COMPANY_ALERT_Z_THRESHOLD = 3.0
+COMPANY_ALERT_MIN_WEEKLY_COUNT = 5
+COMPANY_WATCH_Z_THRESHOLD = 1.0
+COMPANY_WATCH_MIN_WEEKLY_COUNT = 3 
 EXPLAIN_TOP_SIGNALS = 50    # for this many strongest alerts, name which company/issue drove the rise

@@ -14,6 +14,9 @@ public record TrendPoint(int ClusterId, string WeekStart, int Count, double Base
 public record Signal(int ClusterId, string WeekStart, int Count, double BaselineMean,
                      double ZScore, string Reason);
 
+public record CompanySignal(string Company, string Tier, string WeekStart, int Count, double BaselineMean,
+                             double ZScore, string Reason);
+
 // The CFPB file has no free text, so a complaint is its structured fields.
 // ProfileCount = how many complaints share this exact product, issue and company.
 public record Complaint(long Id, string Date, string Product, string SubProduct, string Issue,
@@ -25,7 +28,7 @@ public record SimilarComplaint(Complaint Complaint, double Score);
 public record ClusterDetail(Cluster Cluster, List<Complaint> Representatives, List<TrendPoint> Trend);
 
 // Status is DRAFT, APPROVED, CREATED or REJECTED. Only a person moves a ticket between them.
-public record Ticket(string Id, int ClusterId, string Status, string Title, string ObservedPattern,
+public record Ticket(string Id, int ClusterId, string? Company, string Status, string Title, string ObservedPattern,
                      string Hypothesis, string NextSteps, List<long> EvidenceIds, string? JiraKey,
                      List<string> Audit);
 

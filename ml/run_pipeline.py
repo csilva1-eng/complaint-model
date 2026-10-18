@@ -17,7 +17,8 @@ Pipeline (each stage lives in its own module)
     evaluate      stability, novelty, index recall, human-review sheets          evaluate.py
 
 Output contract (data/artifacts/) -- field names are camelCase to match the Java records:
-    complaints.json  clusters.json  trends.json  signals.json  neighbors.json  eval_report.json
+    complaints.json  clusters.json  trends.json  signals.json  company_signals.json
+    companies.json  neighbors.json  eval_report.json
 """
 import argparse
 import json
@@ -32,7 +33,6 @@ import config as cfg
 import evaluate
 import ingest
 import trends
-import vector_index
 
 
 def _native(o):
@@ -46,24 +46,68 @@ def dump_json(obj, name):
         json.dump(obj, f, default=_native, ensure_ascii=False)
 
 
+def search_same_company(built, query):
+    """Return exact top-k cosine neighbors restricted to each query profile's company."""
+    company_codes = built.prof.codes["company"]
+    neighbors = {}
+
+    for company in np.unique(company_codes[query]):
+        company_queries = query[company_codes[query] == company]
+        candidates = np.flatnonzero(company_codes == company)
+
+        for start in range(0, len(company_queries), 128):
+            query_batch = company_queries[start:start + 128]
+            best_scores = np.full((len(query_batch), cfg.NEIGHBORS_K), -np.inf, dtype=np.float32)
+            best_profiles = np.full((len(query_batch), cfg.NEIGHBORS_K), -1, dtype=np.int64)
+
+            for candidate_start in range(0, len(candidates), 20_000):
+                candidate_batch = candidates[candidate_start:candidate_start + 20_000]
+                scores = built.Z[query_batch] @ built.Z[candidate_batch].T
+                scores[query_batch[:, None] == candidate_batch[None, :]] = -np.inf
+
+                take = min(cfg.NEIGHBORS_K, len(candidate_batch))
+                local_positions = np.argpartition(scores, -take, axis=1)[:, -take:]
+                local_scores = np.take_along_axis(scores, local_positions, axis=1)
+                local_profiles = candidate_batch[local_positions]
+
+                combined_scores = np.concatenate((best_scores, local_scores), axis=1)
+                combined_profiles = np.concatenate((best_profiles, local_profiles), axis=1)
+                best_positions = np.argpartition(combined_scores, -cfg.NEIGHBORS_K, axis=1)[:, -cfg.NEIGHBORS_K:]
+                best_scores = np.take_along_axis(combined_scores, best_positions, axis=1)
+                best_profiles = np.take_along_axis(combined_profiles, best_positions, axis=1)
+
+            order = np.argsort(-best_scores, axis=1)
+            for row, q in enumerate(query_batch):
+                ranked = order[row]
+                neighbors[int(q)] = [
+                    (int(best_profiles[row, pos]), float(best_scores[row, pos]))
+                    for pos in ranked
+                    if best_profiles[row, pos] >= 0 and np.isfinite(best_scores[row, pos])
+                ]
+
+    return neighbors
+
+
 def pick_export_slice(built, c, reps):
     """
-    Choose which profiles leave the pipeline for the dashboard: those of a random sample of
-    complaints (so frequent profiles are well represented), plus every theme's representatives.
-    Their nearest neighbours are searched across the WHOLE FAISS index and shipped too, so
-    "similar complaints" always has a record to show. A profile is shown as its newest complaint.
+    Choose a bounded set of profiles from a random sample of complaints, plus every theme's
+    representatives. Rank neighbors only among profiles from the same company, using vectors
+    that do not include company. A profile is shown as its newest complaint.
     Returns (neighbors {complaint id: [{id, score}]}, sorted profile indices to export).
     """
     prof, example = built.prof, built.prof.example_row
+
     rng = np.random.default_rng(cfg.RANDOM_STATE)
     sample_rows = rng.choice(len(c), size=min(cfg.EXPORT_SAMPLE, len(c)), replace=False)
     query = np.union1d(np.unique(prof.inverse[sample_rows]), np.concatenate(reps))
 
-    D, I = vector_index.search(built.index, built.Z[query], cfg.NEIGHBORS_K + 1)
     neighbors, keep = {}, set(query.tolist())
-    for q, scores, found in zip(query, D, I):
-        hits = [(int(j), float(s)) for s, j in zip(scores, found) if j >= 0 and j != q][:cfg.NEIGHBORS_K]
-        neighbors[int(c.ids[example[q]])] = [{"id": int(c.ids[example[j]]), "score": round(s, 4)} for j, s in hits]
+    profile_neighbors = search_same_company(built, query)
+    for q in query:
+        hits = profile_neighbors[int(q)]
+        neighbors[int(c.ids[example[q]])] = [
+            {"id": int(c.ids[example[j]]), "score": round(score, 4)} for j, score in hits
+        ]
         keep.update(j for j, _ in hits)
     return neighbors, np.array(sorted(keep))
 
@@ -91,8 +135,12 @@ def main(rebuild_data=False, rebuild_index=False):
     signals = trends.explain(signals, c.days, complaint_theme,
                              {"company": c.cats["company"], "issue": c.cats["issue"], "sub_issue": c.cats["sub_issue"]})
     print(f"trends: {len(signals)} flagged theme-weeks in the held-out period")
+    company_signals = trends.detect_company_signals(
+        c.days, c.cats["company"].codes, c.cats["company"].categories,
+        pd.Timestamp(cutoff_day, unit="D"), )
+    print(f"company trends: {len(company_signals)} flagged company-weeks in the held-out period")
 
-    # 5. Bounded slice for the dashboard, with neighbours from the full index
+    # 5. Bounded dashboard slice, with same-company neighbors ranked by issue/profile features
     neighbors, keep = pick_export_slice(built, c, reps)
     rows = prof.example_row[keep]
 
@@ -133,6 +181,8 @@ def main(rebuild_data=False, rebuild_index=False):
     dump_json(clusters, "clusters.json")
     dump_json(trend_rows.to_dict(orient="records"), "trends.json")
     dump_json(signals.to_dict(orient="records"), "signals.json")
+    dump_json(company_signals, "company_signals.json")
+    dump_json([str(name) for name in c.cats["company"].categories], "companies.json")
     dump_json(neighbors, "neighbors.json")
     report["runtime_seconds"] = round(time.time() - t0, 1)
     dump_json(report, "eval_report.json")

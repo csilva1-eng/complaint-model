@@ -39,10 +39,13 @@ HEADER_ALIASES = {
     "submitted_via": ["submittedvia"],
     "company_response": ["companyresponsetoconsumer", "companyresponse"],
     "timely": ["timelyresponse", "timely"],
+    "Tags": ["tag", "tags", "tags?"],
+    "Zip Code": ["zipcode", "zip", "zip_code", "zip code"],
 }
 REQUIRED = ["id", "date", "product", "issue", "company"]
 CATEGORICAL = ["product", "sub_product", "issue", "sub_issue", "company",
-               "state", "submitted_via", "company_response", "timely"]
+               "state", "submitted_via", "company_response", "timely",
+               "Tags", "Zip Code"]
 
 
 class DataError(RuntimeError):
@@ -102,6 +105,30 @@ def _clean_text(s: pd.Series) -> pd.Series:
     return s.fillna("Unknown").str.strip().replace("", "Unknown")
 
 
+def _normalize_tag(value):
+    if pd.isna(value):
+        return "Unknown"
+    text = str(value).strip()
+    if text.lower() in {"", "nan", "none", "null"}:
+        return "Unknown"
+    parts = re.split(r"[;|,/]+", text)
+    norm = []
+    for p in parts:
+        cleaned = re.sub(r"[^a-z0-9]+", "_", str(p).strip().lower()).strip("_")
+        if cleaned:
+            norm.append(cleaned)
+    return "|".join(norm) if norm else "Unknown"
+
+
+def _zip3(value):
+    if pd.isna(value):
+        return "Unknown"
+    digits = re.sub(r"\D", "", str(value))
+    if len(digits) < 3:
+        return "Unknown"
+    return digits[:3]
+
+
 def load_complaints(path=None) -> Complaints:
     path = Path(path or cfg.RAW_CSV)
     if not path.exists():
@@ -139,9 +166,18 @@ def load_complaints(path=None) -> Complaints:
 
         ids_p.append(idn[keep].to_numpy().astype("int64"))
         days_p.append(d[keep].to_numpy().astype("datetime64[D]").astype("int32"))
+        zip_col = chunk["Zip Code"] if "Zip Code" in chunk else pd.Series("Unknown", index=chunk.index)
+        tag_col = chunk["Tags"] if "Tags" in chunk else pd.Series("Unknown", index=chunk.index)
         for c in CATEGORICAL:
-            col = chunk[c] if c in chunk else pd.Series("Unknown", index=chunk.index)
-            cat_p[c].append(pd.Categorical(_clean_text(col[keep])))
+            if c == "Tags":
+                values = tag_col[keep].map(_normalize_tag).fillna("Unknown")
+                cat_p[c].append(pd.Categorical(values))
+            elif c == "Zip Code":
+                values = zip_col[keep].map(_zip3).fillna("Unknown")
+                cat_p[c].append(pd.Categorical(values))
+            else:
+                col = chunk[c] if c in chunk else pd.Series("Unknown", index=chunk.index)
+                cat_p[c].append(pd.Categorical(_clean_text(col[keep])))
         if i % 10 == 0:
             print(f"  read {log['rows_seen']:,} rows")
 

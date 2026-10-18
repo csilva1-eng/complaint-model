@@ -26,7 +26,13 @@ public class TicketController {
     }
 
     @PostMapping public Ticket draft(@RequestParam int clusterId) { return tickets.createDraft(clusterId); }
-    @GetMapping public List<Ticket> list() { return tickets.list(); }
+    @PostMapping("/company")
+    public Ticket companyDraft(@RequestParam String company, @RequestParam String weekStart) {
+        return tickets.createCompanyDraft(company, weekStart);
+    }
+    @GetMapping public List<Ticket> list(@RequestParam(required = false) String company) {
+        return company == null || company.isBlank() ? tickets.list() : tickets.listForCompany(company);
+    }
     @GetMapping("/{id}") public Ticket get(@PathVariable String id) { return tickets.get(id); }
     @PutMapping("/{id}") public Ticket edit(@PathVariable String id, @RequestBody TicketEdit edit) { return tickets.update(id, edit); }
     @PostMapping("/{id}/approve") public Ticket approve(@PathVariable String id) { return tickets.approve(id); }

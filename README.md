@@ -29,16 +29,21 @@ ml/  (Python, pandas, scikit-learn, FAISS)             backend/  (Java 21, Sprin
   hypothesis in a ticket can only say "company-specific" versus "industry-wide", always marked unverified.
 - A **theme** is a recurring mix of product, issue and company built from the same fields CFPB uses for its
   own labels. Treat it as a way to watch volume, not as a newly discovered topic.
-- **Similar complaints** means "about the same product, issue and company", found by cosine similarity over
-  profile vectors. It is dominated by product and issue: a small company is mostly invisible to it, so
-  complaints that differ only by company often score as near-identical.
+- **Similar complaints** are selected from the same company, then ranked by cosine similarity over
+  product, sub-product, issue, sub-issue, Tags and ZIP3. Company filters eligible candidates but does
+  not affect the similarity score.
+
+The dashboard opens with a company selector. Signals, ticket drafts and complaint search remain scoped
+to that selection. Company signals compare each company's weekly volume with its own trailing baseline;
+they are calculated independently from the global theme signals.
 
 ## How a 5 GB file fits in memory
 
 1. **Stream and encode.** The CSV is read 250k rows at a time and each field is stored as a small integer
    code. The whole file becomes a few hundred MB of numpy arrays.
-2. **Collapse to profiles.** Complaints with the same product, sub-product, issue, sub-issue and company are
-   one *profile* with a count. Everything after this works on profiles, not complaints.
+2. **Collapse to profiles.** Complaints with the same product, sub-product, issue, sub-issue, company,
+  Tags and ZIP code are one *profile* with a count. Company remains part of profile identity, but is
+  excluded from the embedding used to rank similar complaints.
 3. **FAISS over profiles.** Each profile is a weighted one-hot vector compressed to 64 dimensions (SVD) and
    L2-normalised, so inner product is cosine similarity. `INDEX_KIND` in `ml/config.py` picks `flat` (exact),
    `ivf` (approximate, faster) or `ivfpq` (approximate, compressed). The default switches to `ivf` above
@@ -64,7 +69,8 @@ python run_pipeline.py --rebuild-index  # refit embeddings, FAISS and themes (ke
 Save the CFPB CSV as `data/raw/complaints.csv`. Column names are matched loosely; if a required one
 (Complaint ID, Date received, Product, Issue, Company) is missing you get an error listing the columns found.
 `MIN_DATE` defaults to 2023-01-01; set it to `2011-12-01` in `ml/config.py` for the full history.
-ZIP code and Tags are deliberately not read.
+Tags are normalized as categorical values; ZIP codes are reduced to their first three digits (ZIP3).
+Both are low-weight similarity features, and missing values are treated as `Unknown`.
 
 Then the backend (`cd backend && mvn spring-boot:run`, Java 21, port 8080, Jira in mock mode) and the
 frontend (`cd frontend/CIE.Web && dotnet run --urls http://localhost:5173`, .NET 8 SDK).
@@ -76,6 +82,8 @@ frontend (`cd frontend/CIE.Web && dotnet run --urls http://localhost:5173`, .NET
 | `clusters.json` | size, label, top products/issues/sub-issues/companies, representative ids | every complaint |
 | `trends.json` | weekly count, baseline mean, z-score, flagged, per theme | every complaint |
 | `signals.json` | flagged theme-weeks, with the company/issue/sub-issue that drove each | every complaint |
+| `companies.json` | company names available in the dashboard selector | every company |
+| `company_signals.json` | flagged company-weeks compared with that company's trailing baseline | every company |
 | `complaints.json` | one record per exported profile (its newest complaint) plus `profileCount` | **export slice only** |
 | `neighbors.json` | top-10 similar profiles, searched across the whole FAISS index | export slice only |
 | `eval_report.json` | exclusions, monthly counts, index recall, stability, novelty, human-review scores | |

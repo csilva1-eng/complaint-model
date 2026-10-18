@@ -8,10 +8,16 @@
 
 <PageTitle>Find complaints</PageTitle>
 
+@if (CompanyParam is null)
+{
+    <h1>Choose a company first</h1>
+    <p class="lede"><a href="">Select a company</a> to search its complaints.</p>
+}
+else
+{
 <h1>Find complaints</h1>
 <p class="lede">
-    Search by company, product or issue, then open the complaints with the most similar profile.
-    The CFPB file has no complaint text, so similarity means "about the same product, issue and company".
+    Search within @CompanyParam, then compare matching complaints from that company.
 </p>
 
 <div class="searchbar">
@@ -54,8 +60,10 @@ else if (results is not null)
         </ComplaintCard>
     }
 }
+}
 
 @code {
+    [Parameter, SupplyParameterFromQuery(Name = "company")] public string? CompanyParam { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "similarTo")] public long? SimilarToParam { get; set; }
 
     string query = "";
@@ -77,9 +85,9 @@ else if (results is not null)
 
     async Task Run()
     {
-        if (string.IsNullOrWhiteSpace(query)) return;
+        if (string.IsNullOrWhiteSpace(query) || CompanyParam is null) return;
         busy = true; error = null; similarTo = null;
-        try { results = await Api.SearchComplaints(query); }
+        try { results = await Api.SearchComplaints(query, CompanyParam); }
         catch (Exception e) { error = ApiException.Describe(e); }
         finally { busy = false; }
     }

@@ -44,7 +44,8 @@ def load_complaints_cached(rebuild=False) -> ingest.Complaints:
     if not cfg.RAW_CSV.exists():
         raise ingest.DataError(f"{cfg.RAW_CSV} not found. Download the CFPB complaints CSV and save it there.")
     st = cfg.RAW_CSV.stat()
-    sig = _md5([str(cfg.RAW_CSV), st.st_size, int(st.st_mtime), cfg.MIN_DATE, cfg.MAX_DATE])
+    schema = [cfg.PROFILE_FIELDS, cfg.BLOCK_WEIGHTS, cfg.MIN_DATE, cfg.MAX_DATE]
+    sig = _md5([str(cfg.RAW_CSV), st.st_size, int(st.st_mtime), *schema])
     path = cfg.CACHE_DIR / f"complaints_{sig}.joblib"
     if path.exists() and not rebuild:
         print("ingest: cache hit (use --rebuild-data to re-read the CSV)")
@@ -58,7 +59,8 @@ def load_complaints_cached(rebuild=False) -> ingest.Complaints:
 
 
 def build_or_load(c, cutoff_day: int, rebuild=False) -> Built:
-    params = [c.signature, cutoff_day, cfg.PROFILE_FIELDS, cfg.BLOCK_WEIGHTS, cfg.SVD_COMPONENTS, cfg.FIT_SAMPLE,
+    params = [c.signature, cutoff_day, cfg.PROFILE_FIELDS, cfg.EMBEDDING_FIELDS, cfg.BLOCK_WEIGHTS,
+              cfg.SVD_COMPONENTS, cfg.FIT_SAMPLE,
               cfg.N_CLUSTERS, cfg.INDEX_KIND, cfg.IVF_NPROBE, cfg.PQ_M, cfg.RANDOM_STATE]
     cache = cfg.CACHE_DIR / f"build_{_md5(params)}"
     if rebuild and cache.exists():

@@ -59,7 +59,7 @@ def build_profiles(c) -> Profiles:
 
 class ProfileEmbedder:
     def __init__(self, sizes: dict):
-        self.fields = list(cfg.PROFILE_FIELDS)
+        self.fields = list(cfg.EMBEDDING_FIELDS)
         block = [sizes[f] for f in self.fields]
         self.offsets = np.concatenate([[0], np.cumsum(block)[:-1]]).astype(np.int64)
         self.n_features = int(sum(block))

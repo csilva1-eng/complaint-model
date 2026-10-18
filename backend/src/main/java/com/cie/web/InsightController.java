@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -35,6 +34,14 @@ public class InsightController {
         return store.signals().stream().limit(Math.max(1, Math.min(limit, 200))).toList();
     }
 
+    @GetMapping("/companies")
+    public List<String> companies() { return store.companies(); }
+
+    @GetMapping("/companies/signals")
+    public List<CompanySignal> companySignals(@RequestParam String company) {
+        return store.companySignals(company);
+    }
+
     @GetMapping("/clusters")
     public List<Cluster> clusters() {
         return store.clusters();
@@ -50,18 +57,9 @@ public class InsightController {
     }
 
     @GetMapping("/complaints/search")
-    public List<Complaint> search(@RequestParam String q, @RequestParam(defaultValue = "25") int limit) {
-        String needle = q.toLowerCase(Locale.ROOT).trim();
-        if (needle.isEmpty()) return List.of();
-        return store.allComplaints().stream()
-                .filter(c -> searchable(c).contains(needle))
-                .limit(Math.max(1, Math.min(limit, 100)))
-                .toList();
-    }
-
-    private static String searchable(Complaint c) {
-        return String.join(" ", c.company(), c.product(), c.subProduct(), c.issue(), c.subIssue())
-                .toLowerCase(Locale.ROOT);
+    public List<Complaint> search(@RequestParam String q, @RequestParam String company,
+                                  @RequestParam(defaultValue = "25") int limit) {
+        return store.companyComplaints(company, q, limit);
     }
 
     @GetMapping("/complaints/{id}/similar")

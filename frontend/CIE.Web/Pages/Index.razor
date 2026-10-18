@@ -1,91 +1,269 @@
 @page "/"
 @inject CieApi Api
+@inject NavigationManager Nav
 
-@* Landing page. Answers one question: where is complaint volume rising faster than normal?
-   Top: flagged weeks, strongest first. Below: every theme, sized by how many complaints it holds.
-   A flag is a reason to investigate, never a verdict. *@
-
-<PageTitle>Signals</PageTitle>
-
-<h1>Where complaint volume is climbing</h1>
-<p class="lede">
-    Themes whose weekly complaints rose well above their own recent level. A rise tells you where to look.
-    It does not tell you why, and complaint volume is not a measure of overall quality.
-</p>
+<PageTitle>@(CompanyParam ?? "Choose a company") · Complaint Intelligence</PageTitle>
 
 @if (error is not null)
 {
     <div class="notice error" role="alert">@error</div>
 }
-else if (signals is null)
+
+@if (CompanyParam is null)
 {
-    <p class="muted">Loading signals…</p>
+    <section class="company-picker">
+        <p class="eyebrow">Complaint Intelligence</p>
+        <h1>Which company are you inspecting?</h1>
+        <p class="lede">Choose a company to review its complaint signals, ticket drafts, and similar complaints.</p>
+        <div class="field company-field">
+            <label for="company-choice">Company</label>
+            <input id="company-choice" list="company-options" @bind="companyDraft"
+                   @bind:event="oninput" @onkeydown="OnCompanyKey"
+                   placeholder="Type to find a company" autocomplete="off" />
+            <datalist id="company-options">
+                @foreach (var company in companies)
+                {
+                    <option value="@company"></option>
+                }
+            </datalist>
+        </div>
+        <button class="primary" @onclick="OpenCompany" disabled="@(!CanOpenCompany)">Inspect company</button>
+    </section>
 }
 else
 {
-    <h2>Flagged weeks</h2>
-    @if (signals.Count == 0)
+    <div class="company-heading">
+        <div>
+            <p class="eyebrow">Company inspection</p>
+            <h1>@CompanyParam</h1>
+        </div>
+        <a class="change-company" href="">Choose another company</a>
+    </div>
+
+    <nav class="workspace-tabs" aria-label="Company workspace">
+        <a href="@TabUrl("signals")" class="@(ActiveTab == "signals" ? "selected" : null)" aria-current="@(ActiveTab == "signals" ? "page" : null)">Signals</a>
+        <a href="@TabUrl("tickets")" class="@(ActiveTab == "tickets" ? "selected" : null)" aria-current="@(ActiveTab == "tickets" ? "page" : null)">Ticket drafts</a>
+        <a href="@TabUrl("complaints")" class="@(ActiveTab == "complaints" ? "selected" : null)" aria-current="@(ActiveTab == "complaints" ? "page" : null)">Find complaints</a>
+    </nav>
+
+    @if (busy)
     {
-        <p>No theme crossed the alert threshold in the held-out period. Lower <code>Z_THRESHOLD</code> in <code>ml/config.py</code> to see weaker signals.</p>
+        <p class="muted">Loading @CompanyParam data…</p>
+    }
+    else if (ActiveTab == "signals")
+    {
+        <section>
+            <h2>Flagged weeks</h2>
+            <p class="muted">Weekly complaint volume for @CompanyParam compared with that company’s own recent baseline. Watches are lower-confidence increases; alerts meet the stronger threshold.</p>
+            @if (signals.Count == 0)
+            {
+                <p>No weeks met the watch threshold for this company in the held-out period.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Tier</th><th>Week of</th><th class="num">Complaints</th><th class="num">Usual level</th><th class="num">Score (z)</th><th>Reason</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var signal in signals)
+                            {
+                                <tr>
+                                    <td><span class="signal-tier @signal.Tier">@signal.Tier</span></td>
+                                    <td>@signal.WeekStart</td>
+                                    <td class="num">@signal.Count</td>
+                                    <td class="num">@signal.BaselineMean.ToString("F1")</td>
+                                    <td class="num alert-text">@signal.ZScore.ToString("F1")</td>
+                                    <td>@signal.Reason</td>
+                                    <td><button @onclick="() => DraftTicket(signal.WeekStart)" disabled="@busy">Draft ticket</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+    else if (ActiveTab == "tickets")
+    {
+        <section>
+            <h2>Ticket drafts</h2>
+            @if (tickets.Count == 0)
+            {
+                <p>No ticket drafts with evidence exclusively from this company.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Status</th><th>Title</th><th>Jira issue</th></tr></thead>
+                        <tbody>
+                            @foreach (var ticket in tickets)
+                            {
+                                <tr>
+                                    <td><span class="status @ticket.Status.ToLowerInvariant()">@ticket.Status</span></td>
+                                    <td><a href="tickets/@ticket.Id?company=@Uri.EscapeDataString(CompanyParam!)">@ticket.Title</a></td>
+                                    <td>@(ticket.JiraKey ?? "Not created")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
     }
     else
     {
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th>Theme</th><th>Week of</th><th class="num">Complaints</th><th class="num">Usual level</th><th class="num">Score (z)</th></tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in signals)
-                    {
-                        <tr>
-                            <td><a href="clusters/@s.ClusterId">@LabelOf(s.ClusterId)</a></td>
-                            <td>@s.WeekStart</td>
-                            <td class="num">@s.Count</td>
-                            <td class="num">@s.BaselineMean.ToString("F1")</td>
-                            <td class="num alert-text">@s.ZScore.ToString("F1")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
+        <section>
+            <h2>Find complaints</h2>
+            <p class="muted">Search within @CompanyParam. Similar matches are also restricted to this company.</p>
+            <div class="searchbar">
+                <label for="q" class="visually-hidden">Search product or issue</label>
+                <input id="q" @bind="query" @bind:event="oninput" @onkeydown="OnSearchKey"
+                       placeholder="Product, issue, or sub-issue" />
+                <button class="primary" @onclick="RunSearch" disabled="@busy">Search</button>
+            </div>
 
-    <h2>All themes</h2>
-    <p class="muted">Bar length shows how many complaints the theme holds. The name is its most distinctive words.</p>
-    <ul class="themes">
-        @foreach (var c in clusters.OrderByDescending(c => c.Size))
-        {
-            <li>
-                <a href="clusters/@c.ClusterId">@c.Label</a>
-                <span class="bar" style="width:@Pct(c.Size)%"></span>
-                <span class="n">@c.Size</span>
-                <span class="muted">@(c.TopIssues.FirstOrDefault()?.Name)</span>
-            </li>
-        }
-    </ul>
+            @if (similarTo is not null)
+            {
+                <h3>Complaints similar to #@similarTo</h3>
+                <button @onclick="ClearSimilar">Back to results</button>
+                @if (similar.Count == 0)
+                {
+                    <p>No similar complaints were found for this complaint.</p>
+                }
+                @foreach (var match in similar)
+                {
+                    <ComplaintCard C="match.Complaint">
+                        <p class="muted">Similarity @match.Score.ToString("F2")</p>
+                    </ComplaintCard>
+                }
+            }
+            else if (results is not null)
+            {
+                <h3>@results.Count @(results.Count == 1 ? "match" : "matches")</h3>
+                @if (results.Count == 0)
+                {
+                    <p>No complaints matched within @CompanyParam.</p>
+                }
+                @foreach (var complaint in results)
+                {
+                    <ComplaintCard C="complaint">
+                        <button @onclick="() => ShowSimilar(complaint.Id)">Show similar complaints</button>
+                    </ComplaintCard>
+                }
+            }
+        </section>
+    }
 }
 
 @code {
-    List<Signal>? signals;
-    List<Cluster> clusters = new();
+    [Parameter, SupplyParameterFromQuery(Name = "company")] public string? CompanyParam { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
+
+    List<string> companies = new();
+    List<CompanySignal> signals = new();
+    List<Ticket> tickets = new();
+    List<Complaint> results = new();
+    List<SimilarComplaint> similar = new();
+    string companyDraft = "";
+    string query = "";
+    string? loadedCompany;
+    string? loadedDataCompany;
+    string? loadedTab;
     string? error;
-    int maxSize = 1;
+    long? similarTo;
+    bool busy;
+
+    string ActiveTab => TabParam is "tickets" or "complaints" ? TabParam : "signals";
+    bool CanOpenCompany => companies.Any(c => string.Equals(c, companyDraft.Trim(), StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            var s = Api.GetSignals(25);
-            var c = Api.GetClusters();
-            await Task.WhenAll(s, c);
-            signals = await s;
-            clusters = await c;
-            maxSize = Math.Max(1, clusters.Select(x => x.Size).DefaultIfEmpty(1).Max());
-        }
+        try { companies = await Api.GetCompanies(); }
         catch (Exception e) { error = ApiException.Describe(e); }
     }
 
-    string LabelOf(int id) => clusters.FirstOrDefault(c => c.ClusterId == id)?.Label ?? $"Theme {id}";
-    string Pct(int n) => (100.0 * n / maxSize).ToString("F0", CultureInfo.InvariantCulture);
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CompanyParam))
+        {
+            loadedCompany = null;
+            return;
+        }
+
+        if (!string.Equals(loadedCompany, CompanyParam, StringComparison.Ordinal))
+        {
+            loadedCompany = CompanyParam;
+            results.Clear();
+            similar.Clear();
+            similarTo = null;
+        }
+        if (loadedDataCompany == CompanyParam && loadedTab == ActiveTab) return;
+
+        loadedDataCompany = CompanyParam;
+        loadedTab = ActiveTab;
+        error = null;
+        busy = true;
+        try
+        {
+            if (ActiveTab == "signals") signals = await Api.GetCompanySignals(CompanyParam);
+            else if (ActiveTab == "tickets") tickets = await Api.GetTickets(CompanyParam);
+        }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+
+    string TabUrl(string tab) => $"?company={Uri.EscapeDataString(CompanyParam!)}&tab={tab}";
+
+    void OpenCompany()
+    {
+        var selected = companies.FirstOrDefault(c => string.Equals(c, companyDraft.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (selected is not null) Nav.NavigateTo($"?company={Uri.EscapeDataString(selected)}&tab=signals");
+    }
+
+    async Task OnCompanyKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") OpenCompany();
+    }
+
+    async Task OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await RunSearch();
+    }
+
+    async Task RunSearch()
+    {
+        busy = true;
+        error = null;
+        similarTo = null;
+        try { results = await Api.SearchComplaints(query, CompanyParam!); }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+
+    async Task ShowSimilar(long id)
+    {
+        busy = true;
+        error = null;
+        try { similar = await Api.GetSimilar(id); similarTo = id; }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+
+    async Task DraftTicket(string weekStart)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var ticket = await Api.CreateCompanyDraft(CompanyParam!, weekStart);
+            Nav.NavigateTo($"tickets/{ticket.Id}?company={Uri.EscapeDataString(CompanyParam!)}");
+        }
+        catch (Exception e) { error = ApiException.Describe(e); }
+        finally { busy = false; }
+    }
+
+    void ClearSimilar() => similarTo = null;
 }

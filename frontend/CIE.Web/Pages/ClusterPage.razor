@@ -51,7 +51,7 @@ else
     @foreach (var r in detail.Representatives)
     {
         <ComplaintCard C="r">
-            <a href="search?similarTo=@r.Id">Find similar complaints</a>
+            <a href="search?company=@Uri.EscapeDataString(r.Company)&similarTo=@r.Id">Find similar complaints</a>
         </ComplaintCard>
     }
 }
