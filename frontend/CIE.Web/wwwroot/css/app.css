@@ -63,7 +63,16 @@ main { max-width: 64rem; padding: 2rem clamp(1rem, 4vw, 3rem) 4rem; }
 .company-picker h1 { max-width: 18ch; }
 .company-field { margin-top: 2rem; }
 .company-field input { min-height: 3.25rem; }
-.company-picker button { margin-top: 0.25rem; }
+.company-list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin: 1rem 0 0.5rem; }
+.company-list-toolbar .muted { margin-right: auto; }
+.company-list-toolbar label { color: var(--muted); font-weight: 600; }
+.company-list-toolbar select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 3px; padding: 0.4rem 0.6rem; }
+.company-list { max-height: min(56vh, 36rem); overflow-y: auto; background: var(--surface); border: 1px solid var(--rule); }
+.company-row { display: flex; width: 100%; justify-content: space-between; align-items: baseline; gap: 1rem; text-align: left; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 0.65rem 0.8rem; }
+.company-row:last-child { border-bottom: 0; }
+.company-row:hover { background: var(--ground); }
+.company-name { overflow-wrap: anywhere; }
+.company-count { flex: none; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .company-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 1rem; }
 .company-heading h1 { overflow-wrap: anywhere; }
 .change-company { margin-bottom: 0.35rem; }

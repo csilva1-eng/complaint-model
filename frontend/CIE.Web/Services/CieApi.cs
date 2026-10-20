@@ -14,11 +14,14 @@ public class CieApi(HttpClient http)
     public async Task<List<Signal>> GetSignals(int limit = 25) =>
         await http.GetFromJsonAsync<List<Signal>>($"api/signals?limit={limit}") ?? [];
 
-    public async Task<List<string>> GetCompanies() =>
-        await http.GetFromJsonAsync<List<string>>("api/companies") ?? [];
+    public async Task<List<CompanyOption>> GetCompanies() =>
+        await http.GetFromJsonAsync<List<CompanyOption>>("api/companies") ?? [];
 
     public async Task<List<CompanySignal>> GetCompanySignals(string company) =>
         await http.GetFromJsonAsync<List<CompanySignal>>($"api/companies/signals?company={Uri.EscapeDataString(company)}") ?? [];
+
+    public async Task<List<CompanyCluster>> GetCompanyClusters(string company) =>
+        await http.GetFromJsonAsync<List<CompanyCluster>>($"api/companies/clusters?company={Uri.EscapeDataString(company)}") ?? [];
 
     public async Task<List<Cluster>> GetClusters() =>
         await http.GetFromJsonAsync<List<Cluster>>("api/clusters") ?? [];

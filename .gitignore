@@ -7,3 +7,4 @@ frontend/**/bin/
 frontend/**/obj/
 __pycache__/
 venv/
+.env

@@ -37,18 +37,16 @@ class Profiles:
 
 
 def build_profiles(c) -> Profiles:
-    fields = cfg.PROFILE_FIELDS
-    sizes = {f: len(c.cats[f].categories) for f in fields}
-    if np.prod([float(s) for s in sizes.values()]) >= 2.0 ** 62:
-        raise ValueError("Too many category combinations to pack into one integer key")
+    PROFILE_FIELDS = ["Product", "Sub-product", "Issue", "Sub-issue", "Company", "Tags", "ZIP code"]
+    sizes = {f: len(c.cats[f].categories) for f in PROFILE_FIELDS}
 
     key = np.zeros(len(c), np.int64)                       # mixed-radix key: one int per complaint
-    for f in fields:
+    for f in PROFILE_FIELDS:
         key = key * sizes[f] + c.cats[f].codes
     uniq, inverse, counts = np.unique(key, return_inverse=True, return_counts=True)
 
     codes, rem = {}, uniq.copy()                           # decode the key back into per-field codes
-    for f in reversed(fields):
+    for f in reversed(PROFILE_FIELDS):
         codes[f] = (rem % sizes[f]).astype(np.int32)
         rem //= sizes[f]
 

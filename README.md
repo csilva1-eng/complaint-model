@@ -84,6 +84,7 @@ frontend (`cd frontend/CIE.Web && dotnet run --urls http://localhost:5173`, .NET
 | `signals.json` | flagged theme-weeks, with the company/issue/sub-issue that drove each | every complaint |
 | `companies.json` | company names available in the dashboard selector | every company |
 | `company_signals.json` | flagged company-weeks compared with that company's trailing baseline | every company |
+| `company_clusters.json` | complaint counts for each company and theme combination | all complaints |
 | `complaints.json` | one record per exported profile (its newest complaint) plus `profileCount` | **export slice only** |
 | `neighbors.json` | top-10 similar profiles, searched across the whole FAISS index | export slice only |
 | `eval_report.json` | exclusions, monthly counts, index recall, stability, novelty, human-review scores | |

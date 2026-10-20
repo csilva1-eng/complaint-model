@@ -16,18 +16,39 @@
         <h1>Which company are you inspecting?</h1>
         <p class="lede">Choose a company to review its complaint signals, ticket drafts, and similar complaints.</p>
         <div class="field company-field">
-            <label for="company-choice">Company</label>
-            <input id="company-choice" list="company-options" @bind="companyDraft"
-                   @bind:event="oninput" @onkeydown="OnCompanyKey"
-                   placeholder="Type to find a company" autocomplete="off" />
-            <datalist id="company-options">
-                @foreach (var company in companies)
-                {
-                    <option value="@company"></option>
-                }
-            </datalist>
+            <label for="company-filter">Find a company</label>
+            <input id="company-filter" @bind="companyFilter" @bind:event="oninput"
+                   placeholder="Filter by company name" autocomplete="off" />
         </div>
-        <button class="primary" @onclick="OpenCompany" disabled="@(!CanOpenCompany)">Inspect company</button>
+        <div class="company-list-toolbar">
+            <span class="muted">@FilteredCompanies.Count.ToString("N0") companies shown</span>
+            <label for="company-order">Order by</label>
+            <select id="company-order" @bind="companyOrder">
+                <option value="most">Most complaints</option>
+                <option value="fewest">Fewest complaints</option>
+                <option value="name">Company name</option>
+            </select>
+        </div>
+        @if (companies.Count == 0 && error is null)
+        {
+            <p class="muted">Loading companies…</p>
+        }
+        else if (FilteredCompanies.Count == 0)
+        {
+            <p class="muted">No companies match that name.</p>
+        }
+        else
+        {
+            <div class="company-list" aria-label="Companies">
+                @foreach (CompanyOption company in FilteredCompanies)
+                {
+                    <button type="button" class="company-row" @onclick="() => OpenCompany(company)">
+                        <span class="company-name">@company.Name</span>
+                        <span class="company-count">@company.ComplaintCount.ToString("N0") <span class="muted">complaints</span></span>
+                    </button>
+                }
+            </div>
+        }
     </section>
 }
 else
@@ -42,6 +63,7 @@ else
 
     <nav class="workspace-tabs" aria-label="Company workspace">
         <a href="@TabUrl("signals")" class="@(ActiveTab == "signals" ? "selected" : null)" aria-current="@(ActiveTab == "signals" ? "page" : null)">Signals</a>
+        <a href="@TabUrl("themes")" class="@(ActiveTab == "themes" ? "selected" : null)" aria-current="@(ActiveTab == "themes" ? "page" : null)">Themes</a>
         <a href="@TabUrl("tickets")" class="@(ActiveTab == "tickets" ? "selected" : null)" aria-current="@(ActiveTab == "tickets" ? "page" : null)">Ticket drafts</a>
         <a href="@TabUrl("complaints")" class="@(ActiveTab == "complaints" ? "selected" : null)" aria-current="@(ActiveTab == "complaints" ? "page" : null)">Find complaints</a>
     </nav>
@@ -77,6 +99,36 @@ else
                                     <td class="num alert-text">@signal.ZScore.ToString("F1")</td>
                                     <td>@signal.Reason</td>
                                     <td><button @onclick="() => DraftTicket(signal.WeekStart)" disabled="@busy">Draft ticket</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+    else if (ActiveTab == "themes")
+    {
+        <section>
+            <h2>Themes involving @CompanyParam</h2>
+            <p class="muted">Complaint counts below are for this company. Open a theme for its overall trend and composition across all companies.</p>
+            @if (companyClusters.Count == 0)
+            {
+                <p>No exported theme associations were found for this company.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Theme</th><th class="num">Company complaints</th><th class="num">Share of theme</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var theme in companyClusters)
+                            {
+                                <tr>
+                                    <td>@theme.Label</td>
+                                    <td class="num">@theme.ComplaintCount.ToString("N0")</td>
+                                    <td class="num">@ShareOfTheme(theme, SelectedCompany).ToString("P1")</td>
+                                    <td><a href="@ClusterUrl(theme)">View theme</a></td>
                                 </tr>
                             }
                         </tbody>
@@ -162,12 +214,14 @@ else
     [Parameter, SupplyParameterFromQuery(Name = "company")] public string? CompanyParam { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "tab")] public string? TabParam { get; set; }
 
-    List<string> companies = new();
+    List<CompanyOption> companies = new();
     List<CompanySignal> signals = new();
+    List<CompanyCluster> companyClusters = new();
     List<Ticket> tickets = new();
     List<Complaint> results = new();
     List<SimilarComplaint> similar = new();
-    string companyDraft = "";
+    string companyFilter = "";
+    string companyOrder = "most";
     string query = "";
     string? loadedCompany;
     string? loadedDataCompany;
@@ -176,8 +230,24 @@ else
     long? similarTo;
     bool busy;
 
-    string ActiveTab => TabParam is "tickets" or "complaints" ? TabParam : "signals";
-    bool CanOpenCompany => companies.Any(c => string.Equals(c, companyDraft.Trim(), StringComparison.OrdinalIgnoreCase));
+    string ActiveTab => TabParam is "themes" or "tickets" or "complaints" ? TabParam : "signals";
+    CompanyOption? SelectedCompany => companies.FirstOrDefault(c =>
+        string.Equals(c.Name, CompanyParam, StringComparison.OrdinalIgnoreCase));
+    List<CompanyOption> FilteredCompanies
+    {
+        get
+        {
+            var matches = string.IsNullOrWhiteSpace(companyFilter)
+                ? companies
+                : companies.Where(c => c.Name.Contains(companyFilter.Trim(), StringComparison.OrdinalIgnoreCase));
+            return companyOrder switch
+            {
+                "fewest" => matches.OrderBy(c => c.ComplaintCount).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+                "name" => matches.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+                _ => matches.OrderByDescending(c => c.ComplaintCount).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -209,6 +279,7 @@ else
         try
         {
             if (ActiveTab == "signals") signals = await Api.GetCompanySignals(CompanyParam);
+            else if (ActiveTab == "themes") companyClusters = await Api.GetCompanyClusters(CompanyParam);
             else if (ActiveTab == "tickets") tickets = await Api.GetTickets(CompanyParam);
         }
         catch (Exception e) { error = ApiException.Describe(e); }
@@ -216,16 +287,15 @@ else
     }
 
     string TabUrl(string tab) => $"?company={Uri.EscapeDataString(CompanyParam!)}&tab={tab}";
-
-    void OpenCompany()
-    {
-        var selected = companies.FirstOrDefault(c => string.Equals(c, companyDraft.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (selected is not null) Nav.NavigateTo($"?company={Uri.EscapeDataString(selected)}&tab=signals");
+    string ClusterUrl(CompanyCluster theme) =>
+        $"clusters/{theme.ClusterId}?company={Uri.EscapeDataString(CompanyParam!)}&companyCount={theme.ComplaintCount}";
+    static double ShareOfTheme(CompanyCluster theme, CompanyOption? selected) {
+        Console.WriteLine(selected?.ComplaintCount);
+        return selected is null || theme.ClusterSize == 0 ? 0 : (double)theme.ComplaintCount / selected.ComplaintCount;
     }
-
-    async Task OnCompanyKey(KeyboardEventArgs e)
+    void OpenCompany(CompanyOption selected)
     {
-        if (e.Key == "Enter") OpenCompany();
+        Nav.NavigateTo($"?company={Uri.EscapeDataString(selected.Name)}&tab=signals");
     }
 
     async Task OnSearchKey(KeyboardEventArgs e)

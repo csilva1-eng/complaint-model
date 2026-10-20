@@ -42,6 +42,12 @@ public final class Models {
     public record CompanySignal(String company, String tier, String weekStart, int count, double baselineMean,
                                 double zScore, String reason) {}
 
+    public record CompanyOption(String name, long complaintCount) {}
+
+    public record CompanyClusterCount(String company, int clusterId, long complaintCount) {}
+
+    public record CompanyCluster(int clusterId, String label, long complaintCount, int clusterSize) {}
+
     public record Neighbor(long id, double score) {}
 
     // ---- 2. API responses --------------------------------------------------------------------

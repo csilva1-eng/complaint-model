@@ -29,12 +29,12 @@ TRAIN_FRACTION = 0.7        # earliest 70% (by date) fits the models; the rest i
 # --- profiles and embeddings --------------------------------------------------------------
 # A "profile" is a distinct combination of these fields. Complaints with the same profile are
 # indistinguishable to the model, so they are collapsed into one row with a count.
-PROFILE_FIELDS = ["product", "sub_product", "issue", "sub_issue", "company", "Tags", "Zip Code"]
+PROFILE_FIELDS = ["Product", "Sub-product", "Issue", "Sub-issue", "Company", "Tags", "ZIP code"]
 # Company stays in profile identity/reporting and filters neighbor candidates, but is not a
 # similarity feature in the embedding score.
-EMBEDDING_FIELDS = ["product", "sub_product", "issue", "sub_issue", "Tags", "Zip Code"]
-BLOCK_WEIGHTS = {"product": 1.0, "sub_product": 1.0, "issue": 1.5, "sub_issue": 1.0,
-                 "Tags": 0.35, "Zip Code": 0.15}
+EMBEDDING_FIELDS = ["Product", "Sub-product", "Issue", "Sub-issue", "Tags", "ZIP code"]
+BLOCK_WEIGHTS = {"Product": 1.0, "Sub-product": 1.0, "Issue": 1.5, "Sub-issue": 1.0,
+                 "Tags": 0.35, "ZIP code": 0.15}
 SVD_COMPONENTS = 64         # divisible by PQ_M so the compressed index option works
 FIT_SAMPLE = 300_000        # training-period complaints used to fit the SVD
 

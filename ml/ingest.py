@@ -26,26 +26,10 @@ from pandas.api.types import union_categoricals
 
 import config as cfg
 
-# canonical name -> acceptable headers, compared after lower-casing and stripping non-alphanumerics
-HEADER_ALIASES = {
-    "id": ["complaintid", "id"],
-    "date": ["datereceived", "date", "receiveddate"],
-    "product": ["product"],
-    "sub_product": ["subproduct"],
-    "issue": ["issue"],
-    "sub_issue": ["subissue"],
-    "company": ["company"],
-    "state": ["state"],
-    "submitted_via": ["submittedvia"],
-    "company_response": ["companyresponsetoconsumer", "companyresponse"],
-    "timely": ["timelyresponse", "timely"],
-    "Tags": ["tag", "tags", "tags?"],
-    "Zip Code": ["zipcode", "zip", "zip_code", "zip code"],
-}
-REQUIRED = ["id", "date", "product", "issue", "company"]
-CATEGORICAL = ["product", "sub_product", "issue", "sub_issue", "company",
-               "state", "submitted_via", "company_response", "timely",
-               "Tags", "Zip Code"]
+REQUIRED = ["Complaint ID", "Date received", "Product", "Issue", "Company"]
+CATEGORICAL = ["Product", "Sub-product", "Issue", "Sub-issue", "Company",
+               "State", "Submitted via",
+               "Tags", "ZIP code"]
 
 
 class DataError(RuntimeError):
@@ -58,7 +42,6 @@ class Complaints:
     ids: np.ndarray            # int64 complaint id
     days: np.ndarray           # int32 days since 1970-01-01 (the date received)
     cats: dict                 # field -> pd.Categorical (integer codes + the category names)
-    log: dict                  # exclusion counts
     signature: str = ""        # fingerprint of the source file, used for cache keys
 
     def __len__(self):
@@ -80,16 +63,7 @@ def _norm(header) -> str:
     return re.sub(r"[^a-z0-9]", "", str(header).lower())
 
 
-def resolve_columns(header) -> dict:
-    """canonical name -> the actual header present in the file."""
-    by_norm = {_norm(h): h for h in header}
-    found = {}
-    for canon, aliases in HEADER_ALIASES.items():
-        for a in aliases:
-            if a in by_norm:
-                found[canon] = by_norm[a]
-                break
-    return found
+
 
 
 def parse_dates(s: pd.Series) -> pd.Series:
@@ -130,68 +104,32 @@ def _zip3(value):
 
 
 def load_complaints(path=None) -> Complaints:
-    path = Path(path or cfg.RAW_CSV)
-    if not path.exists():
-        raise DataError(f"{path} not found. Download the CFPB complaints CSV and save it there.")
+    rows_seen = 0
+    read = pd.read_csv('../data/raw/complaints.csv', chunksize=250000)
+    chunks_to_drop = ['Company public response', 'Company response to consumer', 'Timely response?', 'Date sent to company']
+    
+    ids_p, dates_p = [], []
+    cat_p = {c: [] for c in CATEGORICAL}
+    
+    for i, chunk in enumerate(read):
+        chunk = chunk.drop(columns = chunks_to_drop)
+        rows_seen += chunk.shape[0]
+    
+        ids_p.append(pd.to_numeric(chunk['Complaint ID']).to_numpy())
+        dates_p.append(np.asarray(parse_dates(chunk['Date received'])))
 
-    header = list(pd.read_csv(path, nrows=0, dtype=str).columns)
-    cols = resolve_columns(header)
-    missing = [c for c in REQUIRED if c not in cols]
-    if missing:
-        raise DataError(f"Could not find these columns: {missing}. Columns present: {header}. "
-                        "Add the right header name to HEADER_ALIASES in ingest.py.")
-    optional_missing = [c for c in CATEGORICAL if c not in cols]
-    if optional_missing:
-        print(f"  note: no column for {optional_missing}; those fields will read 'Unknown'")
-    inverse = {v: k for k, v in cols.items()}
-
-    log = {"rows_seen": 0, "dropped_bad_id_or_date": 0, "dropped_outside_date_window": 0,
-           "dropped_duplicate_id": 0}
-    ids_p, days_p, cat_p = [], [], {c: [] for c in CATEGORICAL}
-
-    reader = pd.read_csv(path, usecols=list(cols.values()), dtype=str, chunksize=cfg.CHUNK_ROWS)
-    for i, chunk in enumerate(reader):
-        chunk = chunk.rename(columns=inverse)
-        log["rows_seen"] += len(chunk)
-
-        d = parse_dates(chunk["date"])
-        idn = pd.to_numeric(chunk["id"], errors="coerce")
-        ok = d.notna() & idn.notna()
-        log["dropped_bad_id_or_date"] += int((~ok).sum())
-        window = d >= cfg.MIN_DATE
-        if cfg.MAX_DATE:
-            window &= d <= cfg.MAX_DATE
-        log["dropped_outside_date_window"] += int((ok & ~window).sum())
-        keep = (ok & window).to_numpy()
-
-        ids_p.append(idn[keep].to_numpy().astype("int64"))
-        days_p.append(d[keep].to_numpy().astype("datetime64[D]").astype("int32"))
-        zip_col = chunk["Zip Code"] if "Zip Code" in chunk else pd.Series("Unknown", index=chunk.index)
-        tag_col = chunk["Tags"] if "Tags" in chunk else pd.Series("Unknown", index=chunk.index)
         for c in CATEGORICAL:
-            if c == "Tags":
-                values = tag_col[keep].map(_normalize_tag).fillna("Unknown")
-                cat_p[c].append(pd.Categorical(values))
-            elif c == "Zip Code":
-                values = zip_col[keep].map(_zip3).fillna("Unknown")
-                cat_p[c].append(pd.Categorical(values))
-            else:
-                col = chunk[c] if c in chunk else pd.Series("Unknown", index=chunk.index)
-                cat_p[c].append(pd.Categorical(_clean_text(col[keep])))
+            col = chunk[c] if c in chunk else pd.Series("Unknown", index=chunk.index)
+            cat_p[c].append(pd.Categorical(col.fillna("Unknown")))
         if i % 10 == 0:
-            print(f"  read {log['rows_seen']:,} rows")
-
-    ids, days = np.concatenate(ids_p), np.concatenate(days_p)
-    if len(ids) == 0:
-        raise DataError("No complaints survived cleaning. Check MIN_DATE / MAX_DATE in config.py.")
+            print(f'read {rows_seen} rows')
+    idNum = np.concatenate(ids_p)
+    dates = np.concatenate(dates_p).astype("datetime64[D]").astype(np.int32)
     cats = {c: union_categoricals(parts) for c, parts in cat_p.items()}
 
-    _, first = np.unique(ids, return_index=True)          # keep the first row of any repeated id
-    if len(first) < len(ids):
+    _, first = np.unique(idNum, return_index=True)
+    if len(first) < len(idNum):
         first.sort()
-        log["dropped_duplicate_id"] = int(len(ids) - len(first))
-        ids, days = ids[first], days[first]
+        idNum, dates = idNum[first], dates[first]
         cats = {c: cat[first] for c, cat in cats.items()}
-
-    log["rows_final"] = int(len(ids))
-    return Complaints(ids=ids, days=days, cats=cats, log=log)
+    return Complaints(ids=idNum, days=dates, cats=cats)

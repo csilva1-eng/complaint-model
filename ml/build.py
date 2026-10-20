@@ -49,7 +49,11 @@ def load_complaints_cached(rebuild=False) -> ingest.Complaints:
     path = cfg.CACHE_DIR / f"complaints_{sig}.joblib"
     if path.exists() and not rebuild:
         print("ingest: cache hit (use --rebuild-data to re-read the CSV)")
-        return joblib.load(path)
+        c = joblib.load(path)
+        if not np.issubdtype(c.days.dtype, np.integer):
+            c.days = np.asarray(c.days, dtype="datetime64[D]").astype(np.int32)
+            joblib.dump(c, path)
+        return c
     print("ingest: reading the CSV")
     c = ingest.load_complaints()
     c.signature = sig

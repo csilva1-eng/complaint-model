@@ -63,8 +63,8 @@ def describe(prof, labels, Z, km, c):
         sub = tab[tab["cluster"] == k]
         if sub.empty:
             continue
-        issues, sub_issues = _mix(sub, "issue", c), _mix(sub, "sub_issue", c)
-        companies, products = _mix(sub, "company", c), _mix(sub, "product", c)
+        issues, sub_issues = _mix(sub, "Issue", c), _mix(sub, "Sub-issue", c)
+        companies, products = _mix(sub, "Company", c), _mix(sub, "Product", c)
         label = _label(issues, sub_issues, companies)
         if label in used:
             label += f" [{k}]"                              # keep theme names unique

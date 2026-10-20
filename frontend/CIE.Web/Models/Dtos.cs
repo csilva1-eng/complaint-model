@@ -17,6 +17,10 @@ public record Signal(int ClusterId, string WeekStart, int Count, double Baseline
 public record CompanySignal(string Company, string Tier, string WeekStart, int Count, double BaselineMean,
                              double ZScore, string Reason);
 
+public record CompanyOption(string Name, long ComplaintCount);
+
+public record CompanyCluster(int ClusterId, string Label, long ComplaintCount, int ClusterSize);
+
 // The CFPB file has no free text, so a complaint is its structured fields.
 // ProfileCount = how many complaints share this exact product, issue and company.
 public record Complaint(long Id, string Date, string Product, string SubProduct, string Issue,

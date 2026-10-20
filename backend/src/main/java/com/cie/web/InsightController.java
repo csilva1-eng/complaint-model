@@ -35,11 +35,16 @@ public class InsightController {
     }
 
     @GetMapping("/companies")
-    public List<String> companies() { return store.companies(); }
+    public List<CompanyOption> companies() { return store.companies(); }
 
     @GetMapping("/companies/signals")
     public List<CompanySignal> companySignals(@RequestParam String company) {
         return store.companySignals(company);
+    }
+
+    @GetMapping("/companies/clusters")
+    public List<CompanyCluster> companyClusters(@RequestParam String company) {
+        return store.companyClusters(company);
     }
 
     @GetMapping("/clusters")

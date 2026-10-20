@@ -32,8 +32,9 @@ public class ArtifactStore {
     private Map<Integer, Cluster> clusterById;
     private Map<Integer, List<TrendPoint>> trendByCluster;
     private List<Signal> signals;
-    private List<String> companies;
+    private List<CompanyOption> companies;
     private Map<String, List<CompanySignal>> companySignals;
+    private Map<String, List<CompanyCluster>> companyClusters;
     private Map<Long, List<Neighbor>> neighbors;
 
     public ArtifactStore(@Value("${cie.artifacts-dir}") String dir, ObjectMapper mapper) {
@@ -56,13 +57,23 @@ public class ArtifactStore {
         signals = new ArrayList<>(read("signals.json", new TypeReference<List<Signal>>() {}));
         signals.sort(Comparator.comparingDouble(Signal::zScore).reversed());
 
-        companies = read("companies.json", new TypeReference<List<String>>() {}).stream()
-            .filter(company -> !company.equalsIgnoreCase("Unknown"))
-            .sorted(String.CASE_INSENSITIVE_ORDER)
+        companies = read("companies.json", new TypeReference<List<CompanyOption>>() {}).stream()
+            .filter(company -> !company.name().equalsIgnoreCase("Unknown"))
+            .sorted(Comparator.comparing(CompanyOption::name, String.CASE_INSENSITIVE_ORDER))
             .toList();
         companySignals = read("company_signals.json", new TypeReference<List<CompanySignal>>() {}).stream()
             .collect(Collectors.groupingBy(CompanySignal::company));
         companySignals.values().forEach(list -> list.sort(Comparator.comparingDouble(CompanySignal::zScore).reversed()));
+
+        companyClusters = read("company_clusters.json", new TypeReference<List<CompanyClusterCount>>() {}).stream()
+            .filter(item -> clusterById.containsKey(item.clusterId()))
+            .map(item -> new AbstractMap.SimpleEntry<>(item.company(), new CompanyCluster(item.clusterId(),
+                clusterById.get(item.clusterId()).label(), item.complaintCount(),
+                clusterById.get(item.clusterId()).size())))
+            .collect(Collectors.groupingBy(Map.Entry::getKey,
+                Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
+        companyClusters.values().forEach(list -> list.sort(
+            Comparator.comparingLong(CompanyCluster::complaintCount).reversed()));
 
         neighbors = read("neighbors.json", new TypeReference<Map<Long, List<Neighbor>>>() {});
     }
@@ -82,9 +93,12 @@ public class ArtifactStore {
     public Optional<Cluster> cluster(int id) { return Optional.ofNullable(clusterById.get(id)); }
     public List<TrendPoint> trend(int clusterId) { return trendByCluster.getOrDefault(clusterId, List.of()); }
     public List<Signal> signals() { return signals; }
-    public List<String> companies() { return companies; }
+    public List<CompanyOption> companies() { return companies; }
     public List<CompanySignal> companySignals(String company) {
         return companySignals.getOrDefault(company, List.of());
+    }
+    public List<CompanyCluster> companyClusters(String company) {
+        return companyClusters.getOrDefault(company, List.of());
     }
     public List<Complaint> companyComplaints(String company, String query, int limit) {
         String needle = query.toLowerCase(Locale.ROOT).trim();

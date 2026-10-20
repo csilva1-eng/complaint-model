@@ -48,7 +48,7 @@ def dump_json(obj, name):
 
 def search_same_company(built, query):
     """Return exact top-k cosine neighbors restricted to each query profile's company."""
-    company_codes = built.prof.codes["company"]
+    company_codes = built.prof.codes["Company"]
     neighbors = {}
 
     for company in np.unique(company_codes[query]):
@@ -133,12 +133,26 @@ def main(rebuild_data=False, rebuild_index=False):
     # 4. Trends and alerts (every complaint; needs only date + theme)
     trend_rows, signals = trends.detect(c.days, complaint_theme, pd.Timestamp(cutoff_day, unit="D"))
     signals = trends.explain(signals, c.days, complaint_theme,
-                             {"company": c.cats["company"], "issue": c.cats["issue"], "sub_issue": c.cats["sub_issue"]})
+                             {"Company": c.cats["Company"], "Issue": c.cats["Issue"], "Sub-issue": c.cats["Sub-issue"]})
     print(f"trends: {len(signals)} flagged theme-weeks in the held-out period")
     company_signals = trends.detect_company_signals(
-        c.days, c.cats["company"].codes, c.cats["company"].categories,
+        c.days, c.cats["Company"].codes, c.cats["Company"].categories,
         pd.Timestamp(cutoff_day, unit="D"), )
     print(f"company trends: {len(company_signals)} flagged company-weeks in the held-out period")
+    company_cluster_counts = (
+        pd.DataFrame({"companyCode": c.cats["Company"].codes,
+                      "clusterId": complaint_theme})
+        .groupby(["companyCode", "clusterId"])
+        .size()
+        .rename("complaintCount")
+        .reset_index()
+    )
+    company_clusters = [
+        {"company": str(c.cats["Company"].categories[int(row.companyCode)]),
+         "clusterId": int(row.clusterId),
+         "complaintCount": int(row.complaintCount)}
+        for row in company_cluster_counts.itertuples(index=False)
+    ]
 
     # 5. Bounded dashboard slice, with same-company neighbors ranked by issue/profile features
     neighbors, keep = pick_export_slice(built, c, reps)
@@ -146,11 +160,10 @@ def main(rebuild_data=False, rebuild_index=False):
 
     complaints = pd.DataFrame({
         "id": c.ids[rows], "date": c.date_strings(rows),
-        "product": c.values("product", rows), "subProduct": c.values("sub_product", rows),
-        "issue": c.values("issue", rows), "subIssue": c.values("sub_issue", rows),
-        "company": c.values("company", rows), "state": c.values("state", rows),
-        "submittedVia": c.values("submitted_via", rows), "companyResponse": c.values("company_response", rows),
-        "timely": c.values("timely", rows), "clusterId": built.labels[keep].astype(int),
+        "product": c.values("Product", rows), "subProduct": c.values("Sub-product", rows),
+        "issue": c.values("Issue", rows), "subIssue": c.values("Sub-issue", rows),
+        "company": c.values("Company", rows), "state": c.values("State", rows),
+        "submittedVia": c.values("Submitted via", rows),
         "profileCount": prof.counts[keep],
     })
     print(f"export: {len(complaints):,} complaint records, {len(neighbors):,} with neighbours")
@@ -160,7 +173,6 @@ def main(rebuild_data=False, rebuild_index=False):
     evaluate.write_label_sheets(c, neighbors, row_of_id, signals)
     train = int((c.days < cutoff_day).sum())
     report = {
-        "exclusions": c.log,
         "data": {"complaints": len(c), "distinct_profiles": prof.n, "train": train, "eval": len(c) - train,
                  "exported_records": len(complaints)},
         "monthly_counts": evaluate.monthly_counts(c.days),
@@ -182,7 +194,13 @@ def main(rebuild_data=False, rebuild_index=False):
     dump_json(trend_rows.to_dict(orient="records"), "trends.json")
     dump_json(signals.to_dict(orient="records"), "signals.json")
     dump_json(company_signals, "company_signals.json")
-    dump_json([str(name) for name in c.cats["company"].categories], "companies.json")
+    company_counts = np.bincount(c.cats["Company"].codes, minlength=len(c.cats["Company"].categories))
+    companies = [
+        {"name": str(name), "complaintCount": int(count)}
+        for name, count in zip(c.cats["Company"].categories, company_counts)
+    ]
+    dump_json(companies, "companies.json")
+    dump_json(company_clusters, "company_clusters.json")
     dump_json(neighbors, "neighbors.json")
     report["runtime_seconds"] = round(time.time() - t0, 1)
     dump_json(report, "eval_report.json")
