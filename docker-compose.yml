@@ -1,16 +1,45 @@
 services:
   db:
     image: postgres:17-alpine
-    container_name: project-postgres
-    restart: always
     environment:
+      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      retries: 10
+
+  ml:
+    build: ./ml
+    environment:
+      ARTIFACTS_DIR: /data/artifacts
+    volumes:
+      - ./data/raw:/data/raw:ro
+      - artifacts:/data/artifacts
+
+  backend:
+    build: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      CIE_ALLOWED_ORIGINS: http://localhost:5173
+    volumes:
+      - artifacts:/data/artifacts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8081"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
 
 volumes:
+  artifacts:
   pgdata:
