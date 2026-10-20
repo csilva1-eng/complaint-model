@@ -290,7 +290,6 @@ else
     string ClusterUrl(CompanyCluster theme) =>
         $"clusters/{theme.ClusterId}?company={Uri.EscapeDataString(CompanyParam!)}&companyCount={theme.ComplaintCount}";
     static double ShareOfTheme(CompanyCluster theme, CompanyOption? selected) {
-        Console.WriteLine(selected?.ComplaintCount);
         return selected is null || theme.ClusterSize == 0 ? 0 : (double)theme.ComplaintCount / selected.ComplaintCount;
     }
     void OpenCompany(CompanyOption selected)
